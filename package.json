@@ -1,0 +1,33 @@
+{
+  "name": "quiztape",
+  "private": true,
+  "description": "Quiztape — Side A: stats. Side B: trivia. A Last.fm-powered music quiz for web, iOS and Android.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "web": "npm run web -w @quiztape/client",
+    "ios": "npm run ios -w @quiztape/client",
+    "android": "npm run android -w @quiztape/client",
+    "api": "npm run dev -w @quiztape/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "npm run lint -w @quiztape/client",
+    "db:generate": "npm run generate -w @quiztape/db",
+    "db:migrate": "npm run migrate -w @quiztape/db",
+    "check:platforms": "npm run export:all -w @quiztape/client",
+    "doctor": "npm run doctor -w @quiztape/client"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "~6.0.3",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@quiztape/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Thin Hono API. Runs as a Node service locally; the same app object deploys to serverless adapters. All third-party calls and question generation live here, never in the client.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@quiztape/db": "*",
+    "@quiztape/lastfm": "*",
+    "@quiztape/musicbrainz": "*",
+    "@quiztape/ratelimit": "*",
+    "@quiztape/shared": "*",
+    "hono": "^4.13.8",
+    "zod": "^4.6.5"
+  }
+}

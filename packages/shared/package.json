@@ -1,0 +1,16 @@
+{
+  "name": "@quiztape/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Types and constants shared by the client and the API. Dependency-free and platform-neutral: this package is bundled into web, iOS and Android.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

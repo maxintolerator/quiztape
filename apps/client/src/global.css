@@ -1,0 +1,36 @@
+/*
+ * Web-only baseline. This file is a no-op on iOS and Android (Metro resolves
+ * CSS imports to empty modules on native), so everything here must be purely
+ * cosmetic and duplicated in React Native styles where it matters.
+ */
+:root {
+  color-scheme: dark;
+  --qt-base: #0b0b10;
+  --qt-cream: #f3e9d2;
+  --qt-cyan: #2ef2ff;
+}
+
+html,
+body,
+#root {
+  background-color: var(--qt-base);
+  color: var(--qt-cream);
+  min-height: 100%;
+}
+
+/* Visible keyboard focus everywhere; react-native-web strips the UA outline. */
+:focus-visible {
+  outline: 2px solid var(--qt-cyan);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

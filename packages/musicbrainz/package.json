@@ -1,0 +1,19 @@
+{
+  "name": "@quiztape/musicbrainz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side MusicBrainz WS/2 client: typed lookups, browse and search, strict 1 req/s queue, mandatory User-Agent, 503 back-off. The only source of trivia facts.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@quiztape/ratelimit": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

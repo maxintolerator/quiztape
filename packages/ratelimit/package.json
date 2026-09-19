@@ -1,0 +1,16 @@
+{
+  "name": "@quiztape/ratelimit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Token-bucket rate limiter with a priority queue, plus retry/backoff helpers, shared by every third-party client.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

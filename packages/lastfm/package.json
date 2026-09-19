@@ -1,0 +1,19 @@
+{
+  "name": "@quiztape/lastfm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side Last.fm Web Services client: request signing, session auth, paginated history, rate limited to ~5 req/s. Never bundle into the client; it holds the API secret.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@quiztape/ratelimit": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
