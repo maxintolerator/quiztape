@@ -42,6 +42,7 @@ export class JobRunner {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private stopped = true;
   private inFlight = new Set<Promise<void>>();
+  private lastTickError: { message: string; at: number; suppressed: number } | null = null;
 
   constructor(
     private readonly services: Services,
@@ -95,9 +96,23 @@ export class JobRunner {
         this.inFlight.add(promise);
       }
     } catch (error) {
-      console.error('job runner tick failed', error);
+      this.reportTickError(error);
     }
     this.timer = setTimeout(() => void this.tick(), this.pollMs);
+  }
+
+  /** The same failure (for example an unreachable database) is reported once a minute, not every poll. */
+  private reportTickError(error: unknown): void {
+    const message = error instanceof Error ? error.message.split('\n')[0]! : String(error);
+    const at = this.services.now().getTime();
+    const last = this.lastTickError;
+    if (last && last.message === message && at - last.at < 60_000) {
+      last.suppressed++;
+      return;
+    }
+    const suffix = last && last.message === message && last.suppressed > 0 ? ` (repeated ${last.suppressed} more times)` : '';
+    console.error(`job runner: ${message}${suffix}`);
+    this.lastTickError = { message, at, suppressed: 0 };
   }
 
   private async claim(): Promise<SyncJob | null> {

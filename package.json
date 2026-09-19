@@ -1,7 +1,7 @@
 {
   "name": "quiztape",
   "private": true,
-  "description": "Quiztape — Side A: stats. Side B: trivia. A Last.fm-powered music quiz for web, iOS and Android.",
+  "description": "Quiztape \u2014 Side A: stats. Side B: trivia. A Last.fm-powered music quiz for web, iOS and Android.",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -21,7 +21,8 @@
     "db:generate": "npm run generate -w @quiztape/db",
     "db:migrate": "npm run migrate -w @quiztape/db",
     "check:platforms": "npm run export:all -w @quiztape/client",
-    "doctor": "npm run doctor -w @quiztape/client"
+    "doctor": "npm run doctor -w @quiztape/client",
+    "db:check": "npm run check -w @quiztape/db"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

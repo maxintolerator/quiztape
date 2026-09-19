@@ -32,7 +32,8 @@ npm test                 # vitest across packages and the API
 npm run check:platforms  # expo export for web+ios+android: catches web-only code without a simulator
 npm run doctor           # expo-doctor
 npm run db:generate      # drizzle-kit generate migrations from packages/db/src/schema
-npm run db:migrate       # apply migrations to DATABASE_URL
+npm run db:migrate       # apply migrations to DATABASE_URL (DATABASE_MIGRATE_URL if set)
+npm run db:check         # show target database, tables, applied vs checked-in migrations
 npm run render-docs -w @quiztape/db   # regenerate docs/SCHEMA.md after a schema change
 ```
 

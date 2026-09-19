@@ -17,6 +17,7 @@ Prerequisites: Node 22.13+, a Postgres URL (a free Supabase project works), a La
    ```
    npm install
    npm run db:migrate
+   npm run db:check     # confirms the tables exist before you start the API
    ```
 
 4. Start the API (with the background job runner) and the web app in two terminals:
