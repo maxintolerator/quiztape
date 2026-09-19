@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SupportLink } from '@/components/support-link';
 import { TapeButton } from '@/components/tape-button';
 import { api } from '@/lib/api';
 import { useSession } from '@/store/session';
@@ -59,6 +60,7 @@ export default function ResultsScreen() {
             </View>
 
             <TapeButton label="PLAY ANOTHER" onPress={() => router.replace('/home')} />
+            <SupportLink />
           </>
         ) : !error ? (
           <Text style={styles.muted}>Rewinding…</Text>

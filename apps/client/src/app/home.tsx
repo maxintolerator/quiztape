@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SupportLink } from '@/components/support-link';
 import { TapeButton } from '@/components/tape-button';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/store/session';
@@ -181,6 +182,7 @@ export default function HomeScreen() {
           <Link href="/terms" style={styles.footerLink}>
             Terms
           </Link>
+          <SupportLink compact />
           <Pressable accessibilityRole="button" onPress={() => void deleteAccount()} disabled={deleting}>
             <Text style={[styles.footerLink, confirmDelete && styles.danger]}>{deleting ? 'Deleting…' : confirmDelete ? 'Press again to delete everything' : 'Delete my account and data'}</Text>
           </Pressable>
