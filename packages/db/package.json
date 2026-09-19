@@ -12,6 +12,10 @@
     "./schema": {
       "types": "./src/schema/index.ts",
       "default": "./src/schema/index.ts"
+    },
+    "./testing": {
+      "types": "./src/test-db.ts",
+      "default": "./src/test-db.ts"
     }
   },
   "scripts": {

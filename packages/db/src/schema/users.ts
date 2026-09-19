@@ -69,6 +69,11 @@ export const authFlows = pgTable(
     lastfmTokenHash: text(),
     userId: uuid().references(() => users.id, { onDelete: 'set null' }),
     lastfmErrorCode: smallint(),
+    /** sha256 of the one-time code sent back to the client; swapped for the bearer token via POST /v1/auth/exchange. */
+    exchangeCodeHash: text(),
+    exchangeExpiresAt: tstz(),
+    exchangedAt: tstz(),
+    appSessionId: uuid().references(() => appSessions.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     expiresAt: tstz().notNull(),
     consumedAt: tstz(),
@@ -76,6 +81,7 @@ export const authFlows = pgTable(
   (t) => [
     uniqueIndex('auth_flows_state_uq').on(t.state),
     uniqueIndex('auth_flows_token_hash_uq').on(t.lastfmTokenHash).where(sql`${t.lastfmTokenHash} is not null`),
+    uniqueIndex('auth_flows_exchange_code_uq').on(t.exchangeCodeHash).where(sql`${t.exchangeCodeHash} is not null`),
     index('auth_flows_expires_idx').on(t.expiresAt).where(sql`${t.consumedAt} is null`),
   ],
 );

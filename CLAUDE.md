@@ -27,12 +27,13 @@ npm workspaces. Packages export TypeScript source directly (`exports` → `src/i
 npm run web              # Expo dev server, web target (primary dev loop)
 npm run ios / android    # native dev (needs Xcode / Android Studio; see docs/PLATFORMS.md)
 npm run api              # Hono API with tsx watch on :8787
-npm run typecheck        # tsc across every workspace
+npm run typecheck        # tsc across every workspace (client first regenerates Expo Router route types)
 npm test                 # vitest across packages and the API
 npm run check:platforms  # expo export for web+ios+android: catches web-only code without a simulator
 npm run doctor           # expo-doctor
 npm run db:generate      # drizzle-kit generate migrations from packages/db/src/schema
 npm run db:migrate       # apply migrations to DATABASE_URL
+npm run render-docs -w @quiztape/db   # regenerate docs/SCHEMA.md after a schema change
 ```
 
 ## Rules that are not negotiable

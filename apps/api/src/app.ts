@@ -7,9 +7,17 @@ import { brackets } from './routes/brackets';
 import { health } from './routes/health';
 import { me } from './routes/me';
 import { rounds } from './routes/rounds';
+import type { Services } from './services';
+import type { AuthContext } from './middleware/require-auth';
+
+export type AppEnv = {
+  Variables: {
+    services: Services;
+    auth: AuthContext | null;
+  };
+};
 
 export interface AppOptions {
-  corsOrigins?: string[] | undefined;
   log?: boolean | undefined;
 }
 
@@ -17,16 +25,22 @@ export interface AppOptions {
  * The API as a plain Hono app so it can be served by Node locally and by a
  * serverless adapter in production without changing routes.
  */
-export function createApp(options: AppOptions = {}) {
-  const app = new Hono();
+export function createApp(services: Services, options: AppOptions = {}) {
+  const app = new Hono<AppEnv>();
 
   if (options.log) app.use(logger());
+  app.use('*', async (c, next) => {
+    c.set('services', services);
+    c.set('auth', null);
+    await next();
+  });
   app.use(
     '*',
     cors({
-      origin: options.corsOrigins ?? ['http://localhost:8081'],
+      origin: services.config.corsOrigins,
       credentials: true,
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Authorization', 'Content-Type'],
     }),
   );
 

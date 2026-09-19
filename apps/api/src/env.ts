@@ -15,7 +15,13 @@ const EnvSchema = z.object({
   MUSICBRAINZ_APP_VERSION: z.string().min(1).default('0.1.0'),
   MUSICBRAINZ_CONTACT: z.string().min(3, 'MusicBrainz requires a contact email or URL in the User-Agent'),
   ANTHROPIC_API_KEY: z.string().optional(),
-  SESSION_SECRET: z.string().min(32).optional(),
+  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+  /** Run the background job runner inside this process. Off for pure request-serving instances. */
+  WORKER_ENABLED: z
+    .string()
+    .default('true')
+    .transform((value) => value !== 'false' && value !== '0'),
+  WORKER_ID: z.string().min(1).default('api-1'),
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:8081')

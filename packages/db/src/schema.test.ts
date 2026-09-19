@@ -17,7 +17,7 @@ afterAll(async () => {
 
 describe('schema migrations', () => {
   it('apply cleanly to a fresh Postgres and create every table the schema declares', async () => {
-    const result = await handle.db.execute<{ table_name: string }>(
+    const result = await handle.pglite.execute<{ table_name: string }>(
       sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`,
     );
     const created = new Set(result.rows.map((row) => row.table_name));

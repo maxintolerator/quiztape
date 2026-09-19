@@ -25,7 +25,8 @@ The development Mac is Apple Silicon with an Intel-only Homebrew under `/usr/loc
 | Area | Web | iOS / Android | Status |
 | --- | --- | --- | --- |
 | Global CSS (`apps/client/src/global.css`) | Applies focus-visible ring, reduced-motion, dark colour-scheme | Import resolves to an empty module; the same rules are expressed in RN styles where they matter | Accepted: cosmetic only |
-| Session token storage | httpOnly cookie from the API or AsyncStorage (decide in step 2) | `expo-secure-store` (no web build; values under 2 KB) via `storage.ts` / `storage.web.ts` | Step 2 |
-| Last.fm auth return | API callback then redirect to the web origin; `openAuthSessionAsync` needs https or localhost and a same-origin page calling `maybeCompleteAuthSession()` | API callback then redirect to `quiztape://auth/callback`; iOS requires the custom scheme; Expo Go cannot do this, use a development build | Step 2 |
+| Session token storage | `localStorage`, guarded, in `src/lib/storage.web.ts` | `expo-secure-store` in `src/lib/storage.ts` (Keychain / Keystore; single small token) | Written |
+| Connect start | Full-page redirect through the API and Last.fm (`location.assign` in `src/lib/connect.web.ts`), back to `/auth/callback?code=` on this origin | `WebBrowser.openAuthSessionAsync` in `src/lib/connect.ts`; the API redirects to `quiztape://auth/callback?code=`; Expo Go cannot receive the custom scheme, use a development build | Written |
+| Auth callback route | `src/app/auth/callback.tsx` exchanges the code | Same route via deep link; also handled from the auth session result | Written |
 | Fonts | `useFonts` at runtime (the config plugin does nothing on web) | `expo-font` config plugin embeds the files; name files by PostScript name so Android and iOS resolve the same family | Step 3 |
 | Share card | Web Share API where available, download fallback | `expo-sharing` | Step 5 |

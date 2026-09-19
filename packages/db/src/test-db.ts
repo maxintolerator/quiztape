@@ -4,6 +4,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { Db } from './client';
 import * as schema from './schema';
 
 const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'drizzle');
@@ -15,9 +16,10 @@ const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'd
  */
 export async function createTestDb() {
   const client = new PGlite();
-  const db = drizzle(client, { schema, casing: 'snake_case' });
-  await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  return { db, client, close: () => client.close() };
+  const pglite = drizzle(client, { schema, casing: 'snake_case' });
+  await migrate(pglite, { migrationsFolder: MIGRATIONS_DIR });
+  const db: Db = pglite;
+  return { db, pglite, client, close: () => client.close() };
 }
 
-export type TestDb = Awaited<ReturnType<typeof createTestDb>>['db'];
+export type TestDb = Awaited<ReturnType<typeof createTestDb>>['pglite'];
