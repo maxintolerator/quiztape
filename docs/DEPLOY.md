@@ -71,19 +71,55 @@ To run the support views against production from your laptop, point a `.env` at 
 
 ## 3. Web app on Cloudflare Pages
 
-Create a Pages project connected to the GitHub repository with:
+The web app is a static single-page bundle: HTML, JS and fonts, no server. Cloudflare Pages hosts it for free on its CDN. Two things to decide first:
 
-| Setting | Value |
-| --- | --- |
-| Framework preset | None |
-| Build command | `npm ci && npm run export:web -w @quiztape/client` |
-| Build output directory | `apps/client/dist/web` |
-| Environment variable | `EXPO_PUBLIC_API_URL=https://api.quiztape.com` |
-| Environment variable | `NODE_VERSION=22` |
+- **How Cloudflare gets the code.** Option A connects a GitHub repository and rebuilds on every push (recommended once the repo is on GitHub). Option B uploads a build from your laptop with the Wrangler CLI (works today, no GitHub needed).
+- **Where DNS lives.** Cloudflare Pages can only serve the bare domain `quiztape.com` if the domain’s DNS is hosted at Cloudflare. Moving nameservers is free and takes one registrar change; the `api` record for Fly can then live there too. If you keep DNS elsewhere you can still map `www.quiztape.com` with a CNAME, but not the bare domain.
 
-`apps/client/public/_redirects` already rewrites every path to `index.html`, which the single-page router needs. Then under Custom domains add `quiztape.com` and `www.quiztape.com`; Cloudflare gives you the CNAME records (if the domain's DNS is on Cloudflare it wires them automatically).
+### 3a. Put the domain on Cloudflare DNS
 
-Vercel alternative: same build command and output directory, plus a `vercel.json` with `{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }`.
+1. https://dash.cloudflare.com → **Add a domain** → `quiztape.com` → Free plan. Cloudflare imports your existing records and shows two nameservers.
+2. At your registrar, replace the nameservers with the two Cloudflare gave you. Propagation takes minutes to a few hours; the Cloudflare overview page turns to “Active”.
+3. While there, add the API record: **DNS → Records → Add**: type `CNAME`, name `api`, target `<your-fly-app>.fly.dev`, **Proxy status: DNS only** (grey cloud). Fly issues its own certificate and needs to see the traffic directly.
+
+### 3b-A. Deploy from GitHub (auto-deploys)
+
+1. Create an empty GitHub repository and push: `git remote add origin git@github.com:<you>/quiztape.git && git push -u origin main`.
+2. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git** → pick the repository.
+3. Build settings:
+
+   | Field | Value |
+   | --- | --- |
+   | Project name | `quiztape` (gives `quiztape.pages.dev`) |
+   | Production branch | `main` |
+   | Framework preset | None |
+   | Build command | `npm ci && npm run export:web -w @quiztape/client` |
+   | Build output directory | `apps/client/dist/web` |
+   | Root directory | leave empty (the npm workspace root is the repo root) |
+
+4. **Environment variables** (Production, and the same for Preview): `EXPO_PUBLIC_API_URL` = `https://api.quiztape.com`, `NODE_VERSION` = `22`. The API URL is baked into the bundle at build time, so changing it later means a rebuild.
+5. **Save and Deploy.** First build takes 3–5 minutes. The result is live at `https://quiztape.pages.dev`; test the connect flow there before touching the custom domain (add `https://quiztape.pages.dev` to `CORS_ORIGINS` on Fly temporarily, or just skip to the domain step).
+
+### 3b-B. Deploy from your laptop (no GitHub)
+
+```
+cd /Users/mwe/Desktop/Projects/fun/quiztape
+EXPO_PUBLIC_API_URL=https://api.quiztape.com npm run export:web -w @quiztape/client
+npx wrangler login                                   # opens the browser once
+npx wrangler pages project create quiztape --production-branch main
+npx wrangler pages deploy apps/client/dist/web --project-name quiztape
+```
+
+Repeat the export and the last command for every release.
+
+### 3c. Custom domain
+
+1. Pages project → **Custom domains → Set up a custom domain** → `quiztape.com` → Activate. Because DNS is on Cloudflare it creates the record itself.
+2. Repeat for `www.quiztape.com`.
+3. Optional redirect from `www` to the bare domain: **Rules → Redirect Rules** or a Bulk Redirect; not required.
+4. `https://quiztape.com/privacy` should load within a minute or two once the certificate is issued.
+
+`apps/client/public/_redirects` (`/*  /index.html  200`) is copied into the export and makes deep links such as `/auth/callback?code=...` and `/play/<id>` resolve to the app.
 
 ## 4. Last.fm API account
 
