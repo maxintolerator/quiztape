@@ -119,7 +119,7 @@ Repeat the export and the last command for every release.
 3. Optional redirect from `www` to the bare domain: **Rules → Redirect Rules** or a Bulk Redirect; not required.
 4. `https://quiztape.com/privacy` should load within a minute or two once the certificate is issued.
 
-Deep links such as `/auth/callback?code=...` and `/play/<id>` resolve to the app either way: `wrangler.jsonc` sets `not_found_handling` to single-page-application for Workers, and `apps/client/public/_redirects` does the same on Pages or Netlify.
+Deep links such as `/auth/callback?code=...` and `/play/<id>` resolve to the app because `wrangler.jsonc` sets `not_found_handling` to single-page-application. Do not add a `public/_redirects` file: Workers static hosting rejects a catch-all rewrite to `index.html` as a redirect loop. (Netlify or Pages would need one; use `/*  /index.html  200` there.)
 
 ## 4. Last.fm API account
 
