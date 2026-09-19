@@ -28,10 +28,9 @@ describe('api basics', () => {
     await expect(res.json()).resolves.toMatchObject({ ok: true, service: 'quiztape-api' });
   });
 
-  it('stubs unimplemented routes with 501 and the build step that delivers them', async () => {
-    const res = await app.request('/v1/brackets', { method: 'POST' });
-    expect(res.status).toBe(501);
-    await expect(res.json()).resolves.toMatchObject({ error: 'not_implemented', step: 6 });
+  it('protects every game route with the bearer session', async () => {
+    expect((await app.request('/v1/brackets', { method: 'POST' })).status).toBe(401);
+    expect((await app.request('/v1/rounds', { method: 'POST' })).status).toBe(401);
   });
 
   it('returns JSON 404 for unknown routes and 401 without a token', async () => {

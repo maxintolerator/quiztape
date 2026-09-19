@@ -40,3 +40,9 @@ Append-only log of choices not obvious from the code. Newest last.
 - **Side B answer formats**: albums in release order use a tap-to-order control; track runtime accepts m:ss with a tolerance of at least 15 seconds; openers, closers and "which album" are multiple choice built from the same artist's own albums or the same album's own tracks, so distractors are plausible.
 - **Mixtape alternates sides**, half and half, starting on a random side.
 - **Optional toggles (geography, producer, label) still generate nothing**; they need the Wikidata enrichment job, which is the next piece of Side B.
+
+## 2026-09-19 Step 6: Bracket, and ingestion split per artist
+
+- **One ingestion job per artist, prioritised by rank**, instead of one long job per user. MusicBrainz allows one request per second per IP, so throughput scales with machines (each has its own address) rather than with worker concurrency, and a new user's top artists jump ahead of an old user's deep cuts. Artist jobs are deduplicated by name across users; the per-user job only fans out and skips artists that are already fresh.
+- **Cheaper deep cuts.** Members' own lookups (for side projects and shared members) are fetched only for an artist ranked 150 or better in the requesting user's library; every eligible artist still gets discography and tracklists.
+- **Bracket = two beats per match.** A duel (which did you play more? scored against the rollups) followed by a pick (who advances, the player's taste). The champion is the player's favourite; the duel score is the recall. Play counts are hidden until the bracket is complete so the duel means something. Seeding uses the standard order (1 meets 16 first, 1 and 2 only in the final); the size falls back to the largest the library supports, minimum 8.

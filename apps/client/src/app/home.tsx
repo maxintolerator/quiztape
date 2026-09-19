@@ -1,4 +1,4 @@
-import { type Difficulty, DIFFICULTIES, isLibraryReady, type QuizMode, ROUND_LENGTHS, type RoundLength, type RoundStateDto } from '@quiztape/shared';
+import { BRACKET_SIZES, type BracketSize, type BracketStateDto, type Difficulty, DIFFICULTIES, isLibraryReady, type QuizMode, ROUND_LENGTHS, type RoundLength, type RoundStateDto } from '@quiztape/shared';
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -14,7 +14,7 @@ const MODES: { key: QuizMode; title: string; subtitle: string; tone: string }[] 
   { key: 'side_a', title: 'SIDE A', subtitle: 'Your stats', tone: palette.magenta },
   { key: 'side_b', title: 'SIDE B', subtitle: 'Band trivia', tone: palette.cyan },
   { key: 'mixtape', title: 'FULL MIXTAPE', subtitle: 'Both sides', tone: palette.cream },
-  { key: 'bracket', title: 'BRACKET', subtitle: 'Tournament · step 6', tone: palette.chrome },
+  { key: 'bracket', title: 'BRACKET', subtitle: 'Top-artist tournament', tone: palette.cream },
 ];
 
 const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard', deep_cut: 'Deep cut' };
@@ -31,6 +31,7 @@ export default function HomeScreen() {
   const [mode, setMode] = useState<QuizMode>('side_a');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [length, setLength] = useState<RoundLength>(10);
+  const [bracketSize, setBracketSize] = useState<BracketSize>(16);
   const [starting, setStarting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -68,7 +69,7 @@ export default function HomeScreen() {
   const ready = isLibraryReady(sync) && (sync?.scrobbleCount ?? 0) > 0;
   const trivia = sync?.trivia ?? null;
   const triviaReady = !!trivia?.ready;
-  const modeAvailable = (key: QuizMode) => (key === 'side_a' ? ready : key === 'bracket' ? false : ready && triviaReady);
+  const modeAvailable = (key: QuizMode) => (key === 'side_a' || key === 'bracket' ? ready : ready && triviaReady);
   const triviaStatus = trivia
     ? triviaReady
       ? `${trivia.readyArtists} of ${trivia.eligibleArtists} artists have band facts loaded`
@@ -100,6 +101,11 @@ export default function HomeScreen() {
     setStarting(true);
     setStartError(null);
     try {
+      if (effectiveMode === 'bracket') {
+        const state = await api<BracketStateDto>('/v1/brackets', { method: 'POST', token, body: { size: bracketSize } });
+        router.push({ pathname: '/bracket/[bracketId]', params: { bracketId: state.bracket.id } });
+        return;
+      }
       const state = await api<RoundStateDto>('/v1/rounds', { method: 'POST', token, body: { mode: effectiveMode, difficulty, length } });
       router.push({ pathname: '/play/[roundId]', params: { roundId: state.round.id } });
     } catch (error) {
@@ -153,23 +159,37 @@ export default function HomeScreen() {
         </View>
         {triviaStatus ? <Text style={styles.muted}>{triviaStatus}</Text> : null}
 
-        <Text style={styles.sectionTitle}>DIFFICULTY</Text>
-        <View style={styles.chips}>
-          {DIFFICULTIES.map((d) => (
-            <Chip key={d} label={DIFFICULTY_LABEL[d]} selected={difficulty === d} onPress={() => setDifficulty(d)} />
-          ))}
-        </View>
+        {effectiveMode === 'bracket' ? (
+          <>
+            <Text style={styles.sectionTitle}>BRACKET SIZE</Text>
+            <View style={styles.chips}>
+              {BRACKET_SIZES.map((n) => (
+                <Chip key={n} label={`Top ${n}`} selected={bracketSize === n} onPress={() => setBracketSize(n)} />
+              ))}
+            </View>
+            <Text style={styles.muted}>Each match: guess which artist you played more, then choose who advances.</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.sectionTitle}>DIFFICULTY</Text>
+            <View style={styles.chips}>
+              {DIFFICULTIES.map((d) => (
+                <Chip key={d} label={DIFFICULTY_LABEL[d]} selected={difficulty === d} onPress={() => setDifficulty(d)} />
+              ))}
+            </View>
 
-        <Text style={styles.sectionTitle}>ROUND LENGTH</Text>
-        <View style={styles.chips}>
-          {ROUND_LENGTHS.map((n) => (
-            <Chip key={n} label={`${n} questions`} selected={length === n} onPress={() => setLength(n)} />
-          ))}
-        </View>
+            <Text style={styles.sectionTitle}>ROUND LENGTH</Text>
+            <View style={styles.chips}>
+              {ROUND_LENGTHS.map((n) => (
+                <Chip key={n} label={`${n} questions`} selected={length === n} onPress={() => setLength(n)} />
+              ))}
+            </View>
+          </>
+        )}
 
         <TapeButton label={ready ? 'PRESS PLAY' : 'WAITING FOR TAPE'} tone={effectiveMode === 'side_b' ? 'b' : 'a'} onPress={() => void start()} disabled={!ready} busy={starting} />
         {startError ? <Text style={styles.error}>{startError}</Text> : null}
-        <Text style={styles.muted}>{ready ? 'One question at a time. The reels stop when the timer runs out.' : 'Modes unlock once your history is on tape.'}</Text>
+        <Text style={styles.muted}>{ready ? (effectiveMode === 'bracket' ? 'Seeded from your most played artists.' : 'One question at a time. The reels stop when the timer runs out.') : 'Modes unlock once your history is on tape.'}</Text>
 
         <Pressable accessibilityRole="link" onPress={() => user?.lastfmUrl && void Linking.openURL(user.lastfmUrl)} style={styles.attribution}>
           <Text style={styles.attributionText}>Listening data from Last.fm · powered by AudioScrobbler</Text>
@@ -228,7 +248,7 @@ const styles = StyleSheet.create({
   error: { color: palette.wrong, fontSize: 13, textAlign: 'center' },
   attribution: { alignSelf: 'center', padding: spacing.sm },
   attributionText: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11 },
-  footerLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.lg },
+  footerLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: spacing.lg },
   footerLink: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11, textDecorationLine: 'underline' },
   danger: { color: palette.wrong },
 });

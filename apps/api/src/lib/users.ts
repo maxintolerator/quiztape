@@ -33,10 +33,21 @@ export async function triviaSummary(services: Services, userId: string): Promise
     .leftJoin(schema.artistResolutions, and(eq(schema.artistResolutions.artistKey, schema.userArtistStats.artistKey), eq(schema.artistResolutions.status, 'resolved')))
     .leftJoin(schema.mbArtists, and(eq(schema.mbArtists.mbid, schema.artistResolutions.mbid), isNotNull(schema.mbArtists.tracklistsFetchedAt)))
     .where(and(eq(schema.userArtistStats.userId, userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)));
+  // Running = the user's own fan-out job, or any pending artist job for an artist in this user's library.
   const [running] = await db
     .select({ id: schema.syncJobs.id })
     .from(schema.syncJobs)
-    .where(and(eq(schema.syncJobs.userId, userId), eq(schema.syncJobs.kind, 'mb_ingest'), inArray(schema.syncJobs.status, ['queued', 'running'])))
+    .where(
+      and(
+        eq(schema.syncJobs.kind, 'mb_ingest'),
+        inArray(schema.syncJobs.status, ['queued', 'running']),
+        sql`(${schema.syncJobs.userId} = ${userId} or exists (
+          select 1 from ${schema.userArtistStats} s
+          where s.user_id = ${userId} and s.play_count >= ${MIN_PLAYS_FOR_QUESTIONS}
+            and s.artist_key = ${schema.syncJobs.payload}->>'artistKey'
+        ))`,
+      ),
+    )
     .limit(1);
   const readyArtists = counts?.ready ?? 0;
   return {

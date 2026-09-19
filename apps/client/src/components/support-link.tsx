@@ -21,7 +21,7 @@ export function SupportLink({ compact = false }: { compact?: boolean }) {
 const styles = StyleSheet.create({
   button: { alignSelf: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill, borderWidth: 1, borderColor: palette.cyan },
   label: { color: palette.cyan, fontFamily: fonts.mono, fontSize: 13, letterSpacing: 1 },
-  compact: { padding: spacing.sm },
+  compact: {},
   compactLabel: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11, textDecorationLine: 'underline' },
   pressed: { opacity: 0.8 },
 });
