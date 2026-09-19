@@ -64,6 +64,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
     return build({
       category: 'stats_artist_rank',
       templateId: 'stats_artist_rank.v1',
+      difficulty: anchor.difficulty,
       answerFormat: 'numeric',
       prompt: `Where does ${anchor.artistName} sit in your all-time most played artists?`,
       hint: tolerance > 1 ? `Within ${tolerance} places counts.` : 'Exact or one place off counts.',
@@ -90,6 +91,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
     return build({
       category: 'stats_top_track_for_artist',
       templateId: 'stats_top_track_for_artist.v1',
+      difficulty: anchor.difficulty,
       answerFormat: 'free_text',
       prompt: `What is your most played ${anchor.artistName} track?`,
       hint: `${first.playCount.toLocaleString()} plays, ahead of the runner-up by ${(first.playCount - second.playCount).toLocaleString()}.`,
@@ -114,6 +116,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
     return build({
       category: 'stats_top_album',
       templateId: 'stats_top_album.v1',
+      difficulty: anchor.difficulty,
       answerFormat: 'free_text',
       prompt: `Which ${anchor.artistName} album have you played the most?`,
       hint: `You have played tracks from ${anchor.distinctAlbums} of their albums.`,
@@ -137,6 +140,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
     return build({
       category: 'stats_discovery_order',
       templateId: 'stats_discovery_order.v1',
+      difficulty: anchor.difficulty,
       answerFormat: 'multiple_choice',
       prompt: 'Which of these did you discover first?',
       hint: null,
@@ -182,6 +186,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
     return build({
       category: 'stats_year_chart_topper',
       templateId: 'stats_year_chart_topper.v1',
+      difficulty: anchor.difficulty,
       answerFormat: 'free_text',
       prompt: `Who was your most played artist in ${year}?`,
       hint: `${entry.first!.playCount.toLocaleString()} plays that year.`,
@@ -211,6 +216,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
     return build({
       category: 'stats_head_to_head',
       templateId: 'stats_head_to_head.v1',
+      difficulty: anchor.difficulty,
       answerFormat: 'multiple_choice',
       prompt: 'Which one have you played more?',
       hint: null,
@@ -229,7 +235,13 @@ const GENERATORS: Record<SideACategory, Generator> = {
 type BuildInput = Partial<GeneratedQuestion> & Pick<GeneratedQuestion, 'category' | 'templateId' | 'answerFormat' | 'prompt' | 'correctAnswer' | 'correctDisplay'>;
 
 function build(input: BuildInput): GeneratedQuestion {
+  return buildQuestion(input);
+}
+
+/** Fill defaults and compute the fingerprint. Shared with Side B. */
+export function buildQuestion(input: BuildInput): GeneratedQuestion {
   const question: GeneratedQuestion = {
+    difficulty: 'medium',
     hint: null,
     options: null,
     unit: null,
@@ -238,6 +250,9 @@ function build(input: BuildInput): GeneratedQuestion {
     numericAnswer: null,
     numericTolerance: null,
     anchorArtistKey: null,
+    anchorArtistMbid: null,
+    anchorReleaseGroupMbid: null,
+    anchorRecordingMbid: null,
     anchorYear: null,
     factRefs: [],
     fingerprint: '',
@@ -248,8 +263,21 @@ function build(input: BuildInput): GeneratedQuestion {
 }
 
 function fingerprint(q: GeneratedQuestion): string {
-  const material = JSON.stringify([q.templateId, q.anchorArtistKey, q.anchorYear, q.correctDisplay, (q.options ?? []).map((o) => o.label).sort()]);
+  const material = JSON.stringify([
+    q.templateId,
+    q.anchorArtistKey,
+    q.anchorArtistMbid,
+    q.anchorReleaseGroupMbid,
+    q.anchorRecordingMbid,
+    q.anchorYear,
+    q.correctDisplay,
+    (q.options ?? []).map((o) => o.label).sort(),
+  ]);
   return createHash('sha256').update(material).digest('hex').slice(0, 32);
+}
+
+export function optionIdFor(ctx: GeneratorContext, seed: string): string {
+  return optionId(ctx, seed);
 }
 
 function accepted(name: string): string[] {

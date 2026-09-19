@@ -1,6 +1,7 @@
 import { createTestDb } from '@quiztape/db/testing';
 import { LastfmClient } from '@quiztape/lastfm';
 import { MusicBrainzClient } from '@quiztape/musicbrainz';
+import { RateLimiter } from '@quiztape/ratelimit';
 
 import { deriveKey } from './lib/crypto';
 import type { Services } from './services';
@@ -15,10 +16,12 @@ export async function createTestServices(options: { fetch?: FakeFetch; now?: () 
   const { db, close } = await createTestDb();
   const fetchImpl = (options.fetch ?? (() => new Response('{"error":8,"message":"no fake response"}', { status: 500 }))) as unknown as typeof fetch;
   const noRetry = { retries: 0 };
+  // Scripted upstreams need no politeness; the limiter itself is covered by the client packages' tests.
+  const fast = () => new RateLimiter({ requestsPerSecond: 10_000, burst: 10_000, concurrency: 8 });
   return {
     db,
-    lastfm: new LastfmClient({ apiKey: 'KEY', apiSecret: 'SECRET', fetch: fetchImpl, retry: noRetry }),
-    musicbrainz: new MusicBrainzClient({ appName: 'QuiztapeTest', appVersion: '0', contact: 'test@example.com', fetch: fetchImpl, retry: noRetry }),
+    lastfm: new LastfmClient({ apiKey: 'KEY', apiSecret: 'SECRET', fetch: fetchImpl, retry: noRetry, limiter: fast() }),
+    musicbrainz: new MusicBrainzClient({ appName: 'QuiztapeTest', appVersion: '0', contact: 'test@example.com', fetch: fetchImpl, retry: noRetry, limiter: fast() }),
     sessionKeyKey: deriveKey('test-secret-test-secret-test-secret-1234', 'lastfm-session-key'),
     config: {
       apiBaseUrl: 'http://localhost:8787',

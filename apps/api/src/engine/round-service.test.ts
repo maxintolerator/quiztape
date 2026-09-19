@@ -60,9 +60,9 @@ describe('rounds', () => {
     await expect(res.json()).resolves.toMatchObject({ error: 'library_not_ready' });
   });
 
-  it('plays a full Side A round end to end with grading and scoring', async () => {
+  it('plays a full Side A round end to end with grading and scoring', { timeout: 60_000 }, async () => {
     await enqueueJob(services, { kind: 'backfill', userId, dedupeKey: `backfill:${userId}` });
-    await new JobRunner(services, handlers, { workerId: 'test' }).drain();
+    await new JobRunner(services, handlers, { workerId: 'test' }).drain(); // backfill, stats, mb_ingest (no MusicBrainz scripted here: every artist fails softly)
 
     const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 5 }) }));
     expect(created.status).toBe(201);

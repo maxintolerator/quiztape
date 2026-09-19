@@ -19,9 +19,11 @@ import type { Services } from '../services';
 import { awardPoints, grade } from './grading';
 import { createRng, randomSeed } from './rng';
 import { countEligibleArtists, generateSideAQuestions } from './side-a';
-import type { GeneratedQuestion } from './types';
+import { generateSideBQuestions } from './side-b';
+import type { GeneratedQuestion, GeneratorContext } from './types';
+import { triviaSummary } from '../lib/users';
 
-export const GENERATOR_VERSION = 'side-a.v1';
+export const GENERATOR_VERSION = 'sides-ab.v1';
 const RECENT_FINGERPRINT_DAYS = 30;
 
 export class RoundError extends Error {
@@ -40,7 +42,7 @@ type QuestionRow = typeof schema.roundQuestions.$inferSelect;
 
 export async function createRound(services: Services, userId: string, request: CreateRoundRequest): Promise<RoundStateDto> {
   const { db, now } = services;
-  if (request.mode !== 'side_a') throw new RoundError(400, 'mode_not_available', `${request.mode} arrives in a later build step. Side A is playable now.`);
+  if (request.mode === 'bracket') throw new RoundError(400, 'mode_not_available', 'Bracket arrives in build step 6.');
 
   const [sync] = await db.select().from(schema.userSyncState).where(eq(schema.userSyncState.userId, userId)).limit(1);
   if (!sync || sync.phase !== 'complete' || !sync.statsBuiltAt) {
@@ -63,13 +65,24 @@ export async function createRound(services: Services, userId: string, request: C
     .from(schema.roundQuestions)
     .where(and(eq(schema.roundQuestions.userId, userId), gt(schema.roundQuestions.createdAt, since)));
 
+  if (request.mode !== 'side_a') {
+    const trivia = await triviaSummary(services, userId);
+    if (!trivia.ready) {
+      throw new RoundError(
+        409,
+        'trivia_not_ready',
+        trivia.running
+          ? `Still loading band facts: ${trivia.readyArtists} of ${trivia.eligibleArtists} artists ready. Side A is playable meanwhile.`
+          : `Band facts are not loaded yet for enough artists (${trivia.readyArtists} ready). Refresh to start loading.`,
+      );
+    }
+  }
+
   const seed = randomSeed();
-  const generated = await generateSideAQuestions(
-    { db, userId, rng: createRng(seed), recentFingerprints: new Set(recent.map((r) => r.fingerprint)), usedArtistKeys: new Set() },
-    { difficulty: request.difficulty, count: request.length },
-  );
+  const ctx: GeneratorContext = { db, userId, rng: createRng(seed), recentFingerprints: new Set(recent.map((r) => r.fingerprint)), usedArtistKeys: new Set() };
+  const generated = await generateForMode(ctx, request);
   if (generated.length < Math.min(3, request.length)) {
-    throw new RoundError(409, 'library_too_thin', 'Not enough distinct listening data to build a round yet. Keep scrobbling and try again.');
+    throw new RoundError(409, 'library_too_thin', 'Not enough distinct data to build a round yet. Keep scrobbling and try again.');
   }
 
   const current = now();
@@ -222,6 +235,23 @@ export async function abandonRound(services: Services, userId: string, roundId: 
   return toRoundDto(updated!, 0);
 }
 
+/** Side A, Side B, or a mixtape that alternates the two. */
+async function generateForMode(ctx: GeneratorContext, request: CreateRoundRequest): Promise<GeneratedQuestion[]> {
+  const options = { difficulty: request.difficulty, count: request.length };
+  if (request.mode === 'side_a') return generateSideAQuestions(ctx, options);
+  if (request.mode === 'side_b') return generateSideBQuestions(ctx, options);
+  const half = Math.ceil(request.length / 2);
+  const sideA = await generateSideAQuestions(ctx, { difficulty: request.difficulty, count: half });
+  const sideB = await generateSideBQuestions(ctx, { difficulty: request.difficulty, count: request.length - sideA.length });
+  const mixed: GeneratedQuestion[] = [];
+  const [first, second] = ctx.rng.next() < 0.5 ? [sideA, sideB] : [sideB, sideA];
+  for (let i = 0; i < Math.max(first.length, second.length); i++) {
+    if (first[i]) mixed.push(first[i]!);
+    if (second[i]) mixed.push(second[i]!);
+  }
+  return mixed.slice(0, request.length);
+}
+
 // ------------------------------------------------------------------ helpers
 
 async function loadRound(services: Services, userId: string, roundId: string): Promise<RoundRow> {
@@ -265,7 +295,7 @@ function toRow(q: GeneratedQuestion, roundId: string, userId: string, position: 
     userId,
     position,
     category: q.category,
-    difficulty: 'medium',
+    difficulty: q.difficulty,
     answerFormat: q.answerFormat,
     templateId: q.templateId,
     prompt: q.prompt,
@@ -281,6 +311,9 @@ function toRow(q: GeneratedQuestion, roundId: string, userId: string, position: 
     numericAnswer: q.numericAnswer === null ? null : String(q.numericAnswer),
     numericTolerance: q.numericTolerance === null ? null : String(q.numericTolerance),
     anchorArtistKey: q.anchorArtistKey,
+    anchorArtistMbid: q.anchorArtistMbid,
+    anchorReleaseGroupMbid: q.anchorReleaseGroupMbid,
+    anchorRecordingMbid: q.anchorRecordingMbid,
     anchorYear: q.anchorYear,
     factRefs: q.factRefs,
     fingerprint: q.fingerprint,

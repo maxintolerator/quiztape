@@ -51,6 +51,8 @@ export type AnswerSubmission =
   | { kind: 'text'; text: string }
   | { kind: 'numeric'; value: number }
   | { kind: 'option'; optionId: string }
+  /** For `order` questions: option ids in the player's chosen sequence. */
+  | { kind: 'order'; optionIds: string[] }
   | { kind: 'timeout' }
   | { kind: 'skip' };
 
@@ -97,3 +99,9 @@ export const SPEED_BONUS_MAX = 50;
 export const MIN_ARTISTS_FOR_ROUND = 8;
 /** Artists below this many plays are too thin to ask about; they never become anchors, rivals or options. */
 export const MIN_PLAYS_FOR_QUESTIONS = 50;
+/** Side B needs this many artists with cached discographies before a round can be cut. */
+export const MIN_TRIVIA_ARTISTS_FOR_ROUND = 8;
+/** Question `unit` values the client renders specially. */
+export const UNIT_DURATION = 'duration';
+export const UNIT_RANK = 'rank';
+export const UNIT_YEAR = 'year';

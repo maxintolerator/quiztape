@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../app';
 import { enqueueJob } from '../jobs/queue';
-import { ensureUserRows, publicUser, syncSummary } from '../lib/users';
+import { ensureUserRows, publicUser, syncSummary, triviaSummary } from '../lib/users';
 import { requireAuth } from '../middleware/require-auth';
 
 export const me = new Hono<AppEnv>();
@@ -44,6 +44,10 @@ me.post('/sync/refresh', async (c) => {
     await ensureUserRows(services, userId);
     await enqueueJob(services, { kind: 'backfill', userId, dedupeKey: `backfill:${userId}`, priority: 5 });
     return c.json({ queued: 'backfill' });
+  }
+  const trivia = await triviaSummary(services, userId);
+  if (!trivia.ready && !trivia.running && state.statsBuiltAt) {
+    await enqueueJob(services, { kind: 'mb_ingest', userId, dedupeKey: `mb_ingest:${userId}`, priority: 2 });
   }
   const last = state.lastIncrementalAt?.getTime() ?? 0;
   if (services.now().getTime() - last < REFRESH_MIN_INTERVAL_MS) return c.json({ queued: null, reason: 'too_soon' });

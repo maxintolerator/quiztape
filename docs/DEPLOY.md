@@ -84,21 +84,21 @@ The web app is a static single-page bundle: HTML, JS and fonts, no server. Cloud
 
 ### 3b-A. Deploy from GitHub (auto-deploys)
 
-1. Create an empty GitHub repository and push: `git remote add origin git@github.com:<you>/quiztape.git && git push -u origin main`.
-2. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git** → pick the repository.
+The current Cloudflare dashboard creates a **Worker** with static assets when you connect a Git repository (the older "Pages" flow has no deploy command). `wrangler.jsonc` at the repo root tells Wrangler to upload the export directory with single-page routing, so the default deploy command works unchanged.
+
+1. Push the repository to GitHub (already done: `maxintolerator/quiztape`).
+2. Cloudflare dashboard → **Workers & Pages → Create → Import a repository** → pick `quiztape`.
 3. Build settings:
 
    | Field | Value |
    | --- | --- |
-   | Project name | `quiztape` (gives `quiztape.pages.dev`) |
-   | Production branch | `main` |
-   | Framework preset | None |
+   | Project / Worker name | `quiztape` (gives `quiztape.<account>.workers.dev`) |
    | Build command | `npm ci && npm run export:web -w @quiztape/client` |
-   | Build output directory | `apps/client/dist/web` |
-   | Root directory | leave empty (the npm workspace root is the repo root) |
+   | Deploy command | `npx wrangler deploy` |
+   | Root directory | leave as `/` (the npm workspace root) |
 
-4. **Environment variables** (Production, and the same for Preview): `EXPO_PUBLIC_API_URL` = `https://api.quiztape.com`, `NODE_VERSION` = `22`. The API URL is baked into the bundle at build time, so changing it later means a rebuild.
-5. **Save and Deploy.** First build takes 3–5 minutes. The result is live at `https://quiztape.pages.dev`; test the connect flow there before touching the custom domain (add `https://quiztape.pages.dev` to `CORS_ORIGINS` on Fly temporarily, or just skip to the domain step).
+4. **Build variables** (Settings → Build → Variables and secrets, for the production branch): `EXPO_PUBLIC_API_URL` = `https://api.quiztape.com`, `NODE_VERSION` = `22`. The API URL is baked into the bundle at build time, so changing it later means a rebuild.
+5. **Save and Deploy.** First build takes 3–5 minutes. The result is live at the `workers.dev` URL; test the connect flow there first (add that origin to `CORS_ORIGINS` on Fly temporarily if you want sign-in to work before the custom domain exists).
 
 ### 3b-B. Deploy from your laptop (no GitHub)
 
@@ -114,12 +114,12 @@ Repeat the export and the last command for every release.
 
 ### 3c. Custom domain
 
-1. Pages project → **Custom domains → Set up a custom domain** → `quiztape.com` → Activate. Because DNS is on Cloudflare it creates the record itself.
+1. Worker → **Settings → Domains & Routes → Add → Custom domain** → `quiztape.com`. Because DNS is on Cloudflare it creates the record and certificate itself. (Pages projects: Custom domains → Set up a custom domain.)
 2. Repeat for `www.quiztape.com`.
 3. Optional redirect from `www` to the bare domain: **Rules → Redirect Rules** or a Bulk Redirect; not required.
 4. `https://quiztape.com/privacy` should load within a minute or two once the certificate is issued.
 
-`apps/client/public/_redirects` (`/*  /index.html  200`) is copied into the export and makes deep links such as `/auth/callback?code=...` and `/play/<id>` resolve to the app.
+Deep links such as `/auth/callback?code=...` and `/play/<id>` resolve to the app either way: `wrangler.jsonc` sets `not_found_handling` to single-page-application for Workers, and `apps/client/public/_redirects` does the same on Pages or Netlify.
 
 ## 4. Last.fm API account
 

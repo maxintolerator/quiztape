@@ -3,6 +3,7 @@ import { DIFFICULTY_RULE } from '@quiztape/shared';
 import { eq, sql } from 'drizzle-orm';
 
 import type { Services } from '../services';
+import { enqueueJob } from './queue';
 import type { JobHandler } from './runner';
 
 /**
@@ -111,4 +112,6 @@ export async function rebuildUserStats(services: Services, userId: string): Prom
 export const statsRebuildJob: JobHandler = async ({ services, job }) => {
   if (!job.userId) throw new Error('stats_rebuild job without userId');
   await rebuildUserStats(services, job.userId);
+  // Side B facts for the artists this user can be asked about; low priority, runs behind backfills.
+  await enqueueJob(services, { kind: 'mb_ingest', userId: job.userId, dedupeKey: `mb_ingest:${job.userId}`, priority: 2 });
 };

@@ -51,7 +51,7 @@ describe('backfill and rollups', () => {
 
     const runner = new JobRunner(services, handlers, { workerId: 'test', retryBaseMs: 1 });
     const ran = await runner.drain();
-    expect(ran).toBe(2); // backfill, then the stats_rebuild it queued
+    expect(ran).toBe(3); // backfill, the stats_rebuild it queued, then the mb_ingest the rebuild queued
 
     const recentTrackCalls = fake.state.calls.filter((u) => u.searchParams.get('method') === 'user.getRecentTracks');
     expect(recentTrackCalls).toHaveLength(3); // 8 tracks / 3 per page

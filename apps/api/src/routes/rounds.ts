@@ -19,6 +19,7 @@ const AnswerBody = z.object({
     z.object({ kind: z.literal('text'), text: z.string().max(200) }),
     z.object({ kind: z.literal('numeric'), value: z.number() }),
     z.object({ kind: z.literal('option'), optionId: z.string().max(32) }),
+    z.object({ kind: z.literal('order'), optionIds: z.array(z.string().max(32)).max(16) }),
     z.object({ kind: z.literal('timeout') }),
     z.object({ kind: z.literal('skip') }),
   ]),

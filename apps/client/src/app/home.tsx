@@ -9,11 +9,11 @@ import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/store/session';
 import { fonts, layout, palette, radius, spacing } from '@/theme/tokens';
 
-const MODES: { key: QuizMode; title: string; subtitle: string; tone: string; available: boolean }[] = [
-  { key: 'side_a', title: 'SIDE A', subtitle: 'Your stats', tone: palette.magenta, available: true },
-  { key: 'side_b', title: 'SIDE B', subtitle: 'Band trivia · step 4', tone: palette.cyan, available: false },
-  { key: 'mixtape', title: 'FULL MIXTAPE', subtitle: 'Both sides · step 5', tone: palette.cream, available: false },
-  { key: 'bracket', title: 'BRACKET', subtitle: 'Tournament · step 6', tone: palette.chrome, available: false },
+const MODES: { key: QuizMode; title: string; subtitle: string; tone: string }[] = [
+  { key: 'side_a', title: 'SIDE A', subtitle: 'Your stats', tone: palette.magenta },
+  { key: 'side_b', title: 'SIDE B', subtitle: 'Band trivia', tone: palette.cyan },
+  { key: 'mixtape', title: 'FULL MIXTAPE', subtitle: 'Both sides', tone: palette.cream },
+  { key: 'bracket', title: 'BRACKET', subtitle: 'Tournament · step 6', tone: palette.chrome },
 ];
 
 const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard', deep_cut: 'Deep cut' };
@@ -35,12 +35,23 @@ export default function HomeScreen() {
   const [deleting, setDeleting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
-  // Ask for anything new since the last sync once per visit; the store keeps the summary current.
+  // Ask for anything new since the last sync once per visit, then keep polling while band facts load.
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      const next = await refreshSync();
+      if (cancelled) return;
+      if (next && !next.trivia.ready) timer = setTimeout(poll, 5_000);
+    };
     void requestSync()
       .catch(() => undefined)
-      .then(() => refreshSync());
+      .then(poll);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [token, requestSync, refreshSync]);
 
   const refresh = async () => {
@@ -54,6 +65,16 @@ export default function HomeScreen() {
   };
 
   const ready = isLibraryReady(sync) && (sync?.scrobbleCount ?? 0) > 0;
+  const trivia = sync?.trivia ?? null;
+  const triviaReady = !!trivia?.ready;
+  const modeAvailable = (key: QuizMode) => (key === 'side_a' ? ready : key === 'bracket' ? false : ready && triviaReady);
+  const triviaStatus = trivia
+    ? triviaReady
+      ? `${trivia.readyArtists} of ${trivia.eligibleArtists} artists have band facts loaded`
+      : trivia.running
+        ? `Loading band facts: ${trivia.readyArtists} of ${trivia.eligibleArtists} artists ready`
+        : `Band facts not loaded yet (${trivia.readyArtists} of ${trivia.eligibleArtists}). Refresh to start.`
+    : null;
 
   const deleteAccount = async () => {
     if (!token) return;
@@ -71,12 +92,14 @@ export default function HomeScreen() {
     await signOut();
   };
 
+  const effectiveMode: QuizMode = modeAvailable(mode) ? mode : 'side_a';
+
   const start = async () => {
     if (!token) return;
     setStarting(true);
     setStartError(null);
     try {
-      const state = await api<RoundStateDto>('/v1/rounds', { method: 'POST', token, body: { mode, difficulty, length } });
+      const state = await api<RoundStateDto>('/v1/rounds', { method: 'POST', token, body: { mode: effectiveMode, difficulty, length } });
       router.push({ pathname: '/play/[roundId]', params: { roundId: state.round.id } });
     } catch (error) {
       setStartError(error instanceof ApiError ? error.message : 'Could not start a round');
@@ -112,20 +135,22 @@ export default function HomeScreen() {
         <View style={styles.modes}>
           {MODES.map((m) => {
             const selected = mode === m.key;
+            const available = modeAvailable(m.key);
             return (
               <Pressable
                 key={m.key}
                 accessibilityRole="radio"
-                accessibilityState={{ selected, disabled: !m.available }}
-                disabled={!m.available}
+                accessibilityState={{ selected, disabled: !available }}
+                disabled={!available}
                 onPress={() => setMode(m.key)}
-                style={[styles.modeCard, { borderColor: selected ? m.tone : palette.chromeDim }, !m.available && styles.modeDisabled]}>
+                style={[styles.modeCard, { borderColor: selected ? m.tone : palette.chromeDim }, !available && styles.modeDisabled]}>
                 <Text style={[styles.modeTitle, { color: m.tone }]}>{m.title}</Text>
                 <Text style={styles.modeSubtitle}>{m.subtitle}</Text>
               </Pressable>
             );
           })}
         </View>
+        {triviaStatus ? <Text style={styles.muted}>{triviaStatus}</Text> : null}
 
         <Text style={styles.sectionTitle}>DIFFICULTY</Text>
         <View style={styles.chips}>
@@ -141,7 +166,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        <TapeButton label={ready ? 'PRESS PLAY' : 'WAITING FOR TAPE'} onPress={() => void start()} disabled={!ready} busy={starting} />
+        <TapeButton label={ready ? 'PRESS PLAY' : 'WAITING FOR TAPE'} tone={effectiveMode === 'side_b' ? 'b' : 'a'} onPress={() => void start()} disabled={!ready} busy={starting} />
         {startError ? <Text style={styles.error}>{startError}</Text> : null}
         <Text style={styles.muted}>{ready ? 'One question at a time. The reels stop when the timer runs out.' : 'Modes unlock once your history is on tape.'}</Text>
 

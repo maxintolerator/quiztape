@@ -1,5 +1,5 @@
 import type { Db } from '@quiztape/db';
-import type { AnswerFormat, QuestionCategory, QuestionOption } from '@quiztape/shared';
+import type { AnswerFormat, Difficulty, QuestionCategory, QuestionOption } from '@quiztape/shared';
 
 import type { Rng } from './rng';
 
@@ -7,6 +7,7 @@ import type { Rng } from './rng';
 export interface GeneratedQuestion {
   category: QuestionCategory;
   templateId: string;
+  difficulty: Difficulty;
   answerFormat: AnswerFormat;
   prompt: string;
   hint: string | null;
@@ -19,6 +20,9 @@ export interface GeneratedQuestion {
   numericAnswer: number | null;
   numericTolerance: number | null;
   anchorArtistKey: string | null;
+  anchorArtistMbid: string | null;
+  anchorReleaseGroupMbid: string | null;
+  anchorRecordingMbid: string | null;
   anchorYear: number | null;
   factRefs: unknown[];
   fingerprint: string;

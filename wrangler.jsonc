@@ -1,0 +1,12 @@
+// Cloudflare Workers (static assets) config for the web app.
+// The dashboard's Git integration runs the build command, then `npx wrangler deploy`,
+// which uploads apps/client/dist/web and serves it with single-page routing.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "quiztape",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./apps/client/dist/web",
+    "not_found_handling": "single-page-application"
+  }
+}

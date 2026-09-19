@@ -65,8 +65,20 @@ export function grade(input: GradeInput): GradeResult {
       if (score === 1) return { correct: true, method: 'exact', score, yourAnswerDisplay: submission.text.trim(), normalizedText: normalized };
       return { correct: score >= FUZZY_ACCEPT, method: 'fuzzy', score, yourAnswerDisplay: submission.text.trim(), normalizedText: normalized };
     }
-    case 'order':
-      return wrongKind(submission);
+    case 'order': {
+      if (submission.kind !== 'order') return wrongKind(submission);
+      const correctOrder = (input.correctAnswer as { order?: string[] } | null)?.order ?? [];
+      const labels = new Map((input.options ?? []).map((o) => [o.id, o.label]));
+      const given = submission.optionIds;
+      const correct = given.length === correctOrder.length && given.every((id, i) => id === correctOrder[i]);
+      return {
+        correct,
+        method: 'exact',
+        score: null,
+        yourAnswerDisplay: given.map((id) => labels.get(id) ?? '?').join(' → '),
+        normalizedText: null,
+      };
+    }
   }
 }
 
@@ -82,6 +94,8 @@ function describe(submission: AnswerSubmission): string | null {
       return String(submission.value);
     case 'option':
       return submission.optionId;
+    case 'order':
+      return submission.optionIds.join(' → ');
     default:
       return null;
   }

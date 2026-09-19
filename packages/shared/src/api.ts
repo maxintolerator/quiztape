@@ -11,8 +11,23 @@ export interface PublicUser {
 
 export type SyncPhase = 'pending' | 'backfilling' | 'complete' | 'privacy_blocked' | 'error';
 
+/** Side B readiness: how much of the user's library has MusicBrainz facts behind it. */
+export interface TriviaSummary {
+  /** Artists with enough plays to be asked about. */
+  eligibleArtists: number;
+  /** Of those, mapped to a MusicBrainz artist. */
+  resolvedArtists: number;
+  /** Of those, with a studio discography and tracklists cached. */
+  readyArtists: number;
+  /** Enough ready artists to cut a Side B round. */
+  ready: boolean;
+  /** An ingestion job is queued or running right now. */
+  running: boolean;
+}
+
 export interface SyncSummary {
   phase: SyncPhase;
+  trivia: TriviaSummary;
   scrobbleCount: number;
   /** 0..100 while backfilling; 100 once complete; null when unknown. */
   percent: number | null;

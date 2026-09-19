@@ -30,3 +30,13 @@ Append-only log of choices not obvious from the code. Newest last.
 - **Rounds are stored up front** (all questions generated at creation, seeded PRNG recorded) so a round can be resumed, recapped and later replayed by a challenged friend against the same question set. Fingerprints stop a question repeating within 30 days.
 - **Fonts**: Anton (display), Space Mono (data), Permanent Marker (J-card handwriting), loaded with `useFonts` from `@expo-google-fonts/*` so web, iOS and Android ship identical files. The splash screen holds until fonts and the session are ready.
 - **Timer runs client-side** for feel; the server trusts `responseMs` only for the speed bonus, never for correctness, and clamps it.
+
+## 2026-09-19 Step 4: MusicBrainz ingestion and Side B
+
+- **Ingestion is a per-user job, most played first.** `mb_ingest` walks the user's eligible artists (50+ plays) by rank so Side B unlocks after the first eight artists, not after the whole library. Every step is idempotent and reads `mb_cache_entries` first, so retries and other users' overlapping libraries cost no requests.
+- **Resolution order: Last.fm hint, then name search.** The hint MBID is verified by lookup and name match before it is trusted; searches accept only an exact-name hit that clearly outranks the runner-up. Ties are stored as ambiguous and retried after 30 days rather than guessed.
+- **Studio discography = primary type Album, no secondary types, sole credit, at least one official release.** One canonical release per group is scored by date match, single medium, common format and track count, home market, and the absence of deluxe or reissue wording; only that release's tracklist is fetched.
+- **Members' other bands come from the members' own lookups**, capped at eight per group, which is what makes shared-member and side-project questions possible without a graph crawl.
+- **Side B answer formats**: albums in release order use a tap-to-order control; track runtime accepts m:ss with a tolerance of at least 15 seconds; openers, closers and "which album" are multiple choice built from the same artist's own albums or the same album's own tracks, so distractors are plausible.
+- **Mixtape alternates sides**, half and half, starting on a random side.
+- **Optional toggles (geography, producer, label) still generate nothing**; they need the Wikidata enrichment job, which is the next piece of Side B.
