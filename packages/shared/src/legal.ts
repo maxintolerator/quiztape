@@ -17,9 +17,8 @@ export interface LegalDocument {
 }
 
 export const OPERATOR = {
-  name: '[Your full name]',
-  address: '[Street, postal code, city, country]',
-  email: '[contact email]',
+  name: 'Max Weidemann',
+  email: 'max@intolerator.com',
   homepage: 'https://intolerator.com',
   appDomain: 'https://quiztape.com',
 } as const;
@@ -33,7 +32,7 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'Who is responsible',
       paragraphs: [
-        `Quiztape is operated by ${OPERATOR.name}, ${OPERATOR.address}. Homepage: ${OPERATOR.homepage}. Contact for anything in this policy: ${OPERATOR.email}.`,
+        `Quiztape is operated by ${OPERATOR.name}, a private individual (homepage: ${OPERATOR.homepage}). Contact for anything in this policy: ${OPERATOR.email}. A postal address is available on request by email.`,
       ],
     },
     {

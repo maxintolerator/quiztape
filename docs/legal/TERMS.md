@@ -6,7 +6,7 @@ Quiztape is a free, non-commercial music quiz made by one person for fun. These 
 
 ## The service
 
-Quiztape (https://quiztape.com) is provided by [Your full name] (https://intolerator.com) as a hobby project. It builds quiz rounds from your own Last.fm listening history and from public music facts. It is offered free of charge and without any commercial purpose.
+Quiztape (https://quiztape.com) is provided by Max Weidemann (https://intolerator.com) as a hobby project. It builds quiz rounds from your own Last.fm listening history and from public music facts. It is offered free of charge and without any commercial purpose.
 
 A Last.fm account is required. Quiztape reads your listening data through the official Last.fm API only with your approval and never writes to your Last.fm account.
 
@@ -44,4 +44,4 @@ These terms are governed by the laws of [your country], without prejudice to man
 
 ## Contact
 
-Questions about these terms: [contact email].
+Questions about these terms: max@intolerator.com.

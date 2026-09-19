@@ -6,7 +6,7 @@ Quiztape turns your Last.fm listening history into a music quiz. It is a non-com
 
 ## Who is responsible
 
-Quiztape is operated by [Your full name], [Street, postal code, city, country]. Homepage: https://intolerator.com. Contact for anything in this policy: [contact email].
+Quiztape is operated by Max Weidemann, a private individual (homepage: https://intolerator.com). Contact for anything in this policy: max@intolerator.com. A postal address is available on request by email.
 
 ## What data Quiztape processes
 
