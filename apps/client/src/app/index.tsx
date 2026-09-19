@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TapeButton } from '@/components/tape-button';
 import { startConnect } from '@/lib/connect';
 import { useSession } from '@/store/session';
-import { layout, palette, spacing } from '@/theme/tokens';
+import { fonts, layout, palette, spacing } from '@/theme/tokens';
 
 /** The front door. Last.fm login is required to play; there is no guest mode. */
 export default function ConnectScreen() {
@@ -78,8 +78,8 @@ export function describeError(code: string): string {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: palette.base, alignItems: 'center', justifyContent: 'center' },
   content: { width: '100%', maxWidth: layout.maxContentWidth, paddingHorizontal: spacing.lg, gap: spacing.md, alignItems: 'center' },
-  kicker: { color: palette.cyan, fontSize: 12, letterSpacing: 2 },
-  title: { color: palette.cream, fontSize: 48, fontWeight: '800', letterSpacing: 3, textAlign: 'center' },
+  kicker: { color: palette.cyan, fontFamily: fonts.mono, fontSize: 12, letterSpacing: 2 },
+  title: { color: palette.cream, fontFamily: fonts.display, fontSize: 64, letterSpacing: 4, textAlign: 'center' },
   body: { color: palette.creamMuted, fontSize: 16, lineHeight: 24, textAlign: 'center' },
   button: { marginTop: spacing.md },
   footnote: { color: palette.chrome, fontSize: 12, textAlign: 'center' },

@@ -1,11 +1,15 @@
 import '@/global.css';
 
 import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { useSession } from '@/store/session';
+import { useBrandFonts } from '@/theme/fonts';
 import { palette } from '@/theme/tokens';
+
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const quiztapeTheme = {
   ...DarkTheme,
@@ -43,6 +47,13 @@ function useAuthGate() {
 
 export default function RootLayout() {
   useAuthGate();
+  const fontsReady = useBrandFonts();
+  const status = useSession((s) => s.status);
+
+  useEffect(() => {
+    if (fontsReady && status !== 'loading') void SplashScreen.hideAsync().catch(() => undefined);
+  }, [fontsReady, status]);
+
   return (
     <ThemeProvider value={quiztapeTheme}>
       <StatusBar style="light" />
@@ -50,6 +61,7 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: palette.base },
+          animation: 'fade',
         }}
       />
     </ThemeProvider>

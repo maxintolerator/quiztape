@@ -29,9 +29,9 @@ describe('api basics', () => {
   });
 
   it('stubs unimplemented routes with 501 and the build step that delivers them', async () => {
-    const res = await app.request('/v1/rounds', { method: 'POST' });
+    const res = await app.request('/v1/brackets', { method: 'POST' });
     expect(res.status).toBe(501);
-    await expect(res.json()).resolves.toMatchObject({ error: 'not_implemented', step: 3 });
+    await expect(res.json()).resolves.toMatchObject({ error: 'not_implemented', step: 6 });
   });
 
   it('returns JSON 404 for unknown routes and 401 without a token', async () => {

@@ -28,5 +28,7 @@ The development Mac is Apple Silicon with an Intel-only Homebrew under `/usr/loc
 | Session token storage | `localStorage`, guarded, in `src/lib/storage.web.ts` | `expo-secure-store` in `src/lib/storage.ts` (Keychain / Keystore; single small token) | Written |
 | Connect start | Full-page redirect through the API and Last.fm (`location.assign` in `src/lib/connect.web.ts`), back to `/auth/callback?code=` on this origin | `WebBrowser.openAuthSessionAsync` in `src/lib/connect.ts`; the API redirects to `quiztape://auth/callback?code=`; Expo Go cannot receive the custom scheme, use a development build | Written |
 | Auth callback route | `src/app/auth/callback.tsx` exchanges the code | Same route via deep link; also handled from the auth session result | Written |
-| Fonts | `useFonts` at runtime (the config plugin does nothing on web) | `expo-font` config plugin embeds the files; name files by PostScript name so Android and iOS resolve the same family | Step 3 |
+| Fonts | `useFonts` with `@expo-google-fonts` packages (Anton, Space Mono, Permanent Marker) | Same hook, same files; no config plugin needed | Written |
+| Reel timer animation | `Animated` loop; static when `prefers-reduced-motion` | Same, via `AccessibilityInfo.isReduceMotionEnabled` | Written |
+| VHS scanlines | CSS overlay in `global.css` | Not rendered (cosmetic only) | Accepted |
 | Share card | Web Share API where available, download fallback | `expo-sharing` | Step 5 |

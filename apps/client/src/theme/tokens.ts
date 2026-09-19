@@ -36,12 +36,12 @@ export const side = {
 } as const;
 
 export const fonts = {
-  /** Bold condensed display face for headers. */
-  display: 'QuiztapeDisplay',
-  /** Clean monospace for data and labels. */
-  mono: 'QuiztapeMono',
-  /** Marker / handwritten face for cassette J-card question labels. */
-  marker: 'QuiztapeMarker',
+  /** Bold condensed display face for headers (Anton). */
+  display: 'Anton_400Regular',
+  /** Clean monospace for data and labels (Space Mono). */
+  mono: 'SpaceMono_400Regular',
+  /** Marker / handwritten face for cassette J-card question labels (Permanent Marker). */
+  marker: 'PermanentMarker_400Regular',
 } as const;
 
 export const spacing = {

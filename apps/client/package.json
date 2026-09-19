@@ -18,6 +18,9 @@
     "types:routes": "expo customize tsconfig.json"
   },
   "dependencies": {
+    "@expo-google-fonts/anton": "^0.4.1",
+    "@expo-google-fonts/permanent-marker": "^0.4.0",
+    "@expo-google-fonts/space-mono": "^0.4.1",
     "@quiztape/shared": "*",
     "expo": "~57.0.24",
     "expo-constants": "~57.0.19",

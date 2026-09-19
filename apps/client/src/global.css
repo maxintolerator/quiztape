@@ -34,3 +34,13 @@ body,
     scroll-behavior: auto !important;
   }
 }
+
+/* Faint VHS scanlines. Static, so it needs no reduced-motion exception. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 3px);
+  z-index: 9999;
+}

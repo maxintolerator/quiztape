@@ -10,7 +10,7 @@ Requires Node 22.13 or newer (Expo SDK 57 floor).
 
 ```
 apps/client      Expo Router app (web + iOS + Android). No secrets, no third-party API calls.
-apps/api         Hono API. Node service locally; same app object for serverless. All Last.fm/MusicBrainz/Claude calls live here.
+apps/api         Hono API + in-process job runner. All Last.fm/MusicBrainz/Claude calls and the question engine (src/engine) live here.
 packages/shared  Types and constants shared by client and API. Dependency-free, platform-neutral.
 packages/db      Drizzle schema, migrations, Postgres client (Supabase-compatible).
 packages/ratelimit  Token-bucket limiter + retry/backoff used by every upstream client.
