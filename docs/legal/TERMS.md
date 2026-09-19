@@ -32,7 +32,7 @@ Quiztape is provided “as is” and “as available”, without warranties of a
 
 ## Limitation of liability
 
-To the extent permitted by law, the operator is not liable for any indirect, incidental or consequential damages arising from your use of Quiztape. Liability for intent, gross negligence, and for injury to life, body or health remains unaffected, as do any rights you have under mandatory consumer protection law.
+To the maximum extent permitted by applicable law, the operator is not liable for any indirect, incidental, special or consequential damages arising from your use of Quiztape, and total liability for any claim is limited to the amount you paid for the service, which is nothing. Some states do not allow certain exclusions or limitations, so parts of this section may not apply to you.
 
 ## Ending things
 
@@ -40,7 +40,7 @@ You can stop using Quiztape at any time and delete your account and data in the 
 
 ## Governing law
 
-These terms are governed by the laws of [your country], without prejudice to mandatory consumer protection rules of the country you live in.
+These terms are governed by the laws of the State of [your US state] and applicable United States federal law, without regard to conflict-of-law rules.
 
 ## Contact
 

@@ -1,8 +1,8 @@
 /**
  * Privacy policy and terms of use, rendered in-app at /privacy and /terms
- * and mirrored to docs/legal. Plain-English templates for a non-commercial
- * project run by a private individual; the bracketed placeholders must be
- * filled in before launch. This is not legal advice.
+ * and mirrored to docs/legal. Plain-English documents for a free,
+ * non-commercial project run by a private individual in the United States.
+ * Remaining bracketed placeholders are filled in at deploy time. Not legal advice.
  */
 export interface LegalSection {
   heading: string;
@@ -47,10 +47,10 @@ export const PRIVACY_POLICY: LegalDocument = {
       ],
     },
     {
-      heading: 'Why and on what legal basis',
+      heading: 'Why',
       paragraphs: [
-        'Quiztape processes this data to provide the service you asked for: importing your history, generating questions from it, grading your answers and remembering your results. Under the GDPR this is performance of the agreement between you and Quiztape (Art. 6(1)(b)) and, for the optional AI grading, your consent (Art. 6(1)(a)), which you can withdraw in settings at any time.',
-        'Quiztape does not show advertising, does not use analytics or tracking services, does not build profiles for third parties and does not sell or rent data.',
+        'Quiztape processes this data for one reason: to provide the service you asked for by connecting your account. That means importing your history, generating questions from it, grading your answers and remembering your results. The optional AI grading only runs if you switch it on in settings, and you can switch it off again at any time.',
+        'Quiztape does not show advertising, does not use analytics or tracking services, does not build profiles for anyone else and does not sell, rent or share your data for money or for marketing.',
       ],
     },
     {
@@ -71,10 +71,10 @@ export const PRIVACY_POLICY: LegalDocument = {
       ],
     },
     {
-      heading: 'Your rights',
+      heading: 'Your choices',
       paragraphs: [
-        'You have the right to access the data Quiztape holds about you, to have it corrected or deleted, to restrict or object to its processing, and to receive it in a portable format. Deletion is available directly in the app; for everything else, email the address above and it will be handled within one month.',
-        'If you believe your data is being handled unlawfully you can lodge a complaint with your local data protection authority.',
+        'You can delete your account and every piece of data Quiztape holds about you directly in the app, at any time, no questions asked. If you would like a copy of your data or want something corrected, email the address above and it will be handled within 30 days.',
+        'You can also cut Quiztape off at the source by removing it under Applications in your Last.fm settings.',
       ],
     },
     {
@@ -136,7 +136,7 @@ export const TERMS_OF_USE: LegalDocument = {
     {
       heading: 'Limitation of liability',
       paragraphs: [
-        'To the extent permitted by law, the operator is not liable for any indirect, incidental or consequential damages arising from your use of Quiztape. Liability for intent, gross negligence, and for injury to life, body or health remains unaffected, as do any rights you have under mandatory consumer protection law.',
+        'To the maximum extent permitted by applicable law, the operator is not liable for any indirect, incidental, special or consequential damages arising from your use of Quiztape, and total liability for any claim is limited to the amount you paid for the service, which is nothing. Some states do not allow certain exclusions or limitations, so parts of this section may not apply to you.',
       ],
     },
     {
@@ -147,7 +147,7 @@ export const TERMS_OF_USE: LegalDocument = {
     },
     {
       heading: 'Governing law',
-      paragraphs: ['These terms are governed by the laws of [your country], without prejudice to mandatory consumer protection rules of the country you live in.'],
+      paragraphs: ['These terms are governed by the laws of the State of [your US state] and applicable United States federal law, without regard to conflict-of-law rules.'],
     },
     {
       heading: 'Contact',

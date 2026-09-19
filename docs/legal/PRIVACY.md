@@ -22,11 +22,11 @@ Technical data: a login token for your device (stored as a hash on the server an
 
 Optional AI grading: if enabled in settings, the text of a quiz question and the answer you typed may be sent to Anthropic (Claude API) to judge an ambiguous free-text answer or to rephrase a question. Your listening history, username and account data are never sent.
 
-## Why and on what legal basis
+## Why
 
-Quiztape processes this data to provide the service you asked for: importing your history, generating questions from it, grading your answers and remembering your results. Under the GDPR this is performance of the agreement between you and Quiztape (Art. 6(1)(b)) and, for the optional AI grading, your consent (Art. 6(1)(a)), which you can withdraw in settings at any time.
+Quiztape processes this data for one reason: to provide the service you asked for by connecting your account. That means importing your history, generating questions from it, grading your answers and remembering your results. The optional AI grading only runs if you switch it on in settings, and you can switch it off again at any time.
 
-Quiztape does not show advertising, does not use analytics or tracking services, does not build profiles for third parties and does not sell or rent data.
+Quiztape does not show advertising, does not use analytics or tracking services, does not build profiles for anyone else and does not sell, rent or share your data for money or for marketing.
 
 ## Where the data is stored and who else touches it
 
@@ -46,11 +46,11 @@ Server logs are deleted after at most 30 days.
 
 You can also revoke Quiztape’s access in your Last.fm settings under Applications. That invalidates the session key; your Quiztape account and its data remain until you delete them.
 
-## Your rights
+## Your choices
 
-You have the right to access the data Quiztape holds about you, to have it corrected or deleted, to restrict or object to its processing, and to receive it in a portable format. Deletion is available directly in the app; for everything else, email the address above and it will be handled within one month.
+You can delete your account and every piece of data Quiztape holds about you directly in the app, at any time, no questions asked. If you would like a copy of your data or want something corrected, email the address above and it will be handled within 30 days.
 
-If you believe your data is being handled unlawfully you can lodge a complaint with your local data protection authority.
+You can also cut Quiztape off at the source by removing it under Applications in your Last.fm settings.
 
 ## Cookies and local storage
 

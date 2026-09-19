@@ -14,7 +14,7 @@ Serverless is deliberately not used for the API: the backfill runs for minutes p
 
 - Domain `quiztape.com` at a registrar where you can edit DNS.
 - Accounts: Fly.io (`brew install flyctl` or the installer from fly.io; `fly auth login`), Cloudflare (Pages), Supabase (existing).
-- Fill the remaining placeholders in `packages/shared/src/legal.ts` (hosting regions, governing law) and rebuild; the pages are served at `/privacy` and `/terms`. Name and contact email are set; the postal address is offered on request rather than published.
+- Fill the remaining placeholders in `packages/shared/src/legal.ts` (hosting provider regions, your US state for governing law) and rebuild; the pages are served at `/privacy` and `/terms`. Apple and Google require the privacy policy URL for store listings.
 - Last.fm's terms: before opening the app to the public, email partners@last.fm about the 100 MB storage cap and non-commercial use (see `docs/COMPLIANCE.md`).
 
 ## 1. Production environment values
