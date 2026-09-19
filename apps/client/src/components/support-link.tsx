@@ -9,9 +9,10 @@ import { fonts, palette, radius, spacing } from '@/theme/tokens';
  * builds hide it until that is settled. Renders nothing without a Ko-fi name.
  */
 export function SupportLink({ compact = false }: { compact?: boolean }) {
-  if (!KOFI_URL || Platform.OS !== 'web') return null;
+  const url = KOFI_URL;
+  if (!url || Platform.OS !== 'web') return null;
   return (
-    <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(KOFI_URL)} style={({ pressed }) => [compact ? styles.compact : styles.button, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(url)} style={({ pressed }) => [compact ? styles.compact : styles.button, pressed && styles.pressed]}>
       <Text style={compact ? styles.compactLabel : styles.label}>☕ Buy me a tape</Text>
     </Pressable>
   );
