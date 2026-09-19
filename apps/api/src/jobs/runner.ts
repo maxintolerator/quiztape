@@ -103,7 +103,8 @@ export class JobRunner {
 
   /** The same failure (for example an unreachable database) is reported once a minute, not every poll. */
   private reportTickError(error: unknown): void {
-    const message = error instanceof Error ? error.message.split('\n')[0]! : String(error);
+    const cause = error instanceof Error && error.cause instanceof Error ? ` <- ${error.cause.message}` : '';
+    const message = (error instanceof Error ? error.message.split('\n')[0]! : String(error)) + cause;
     const at = this.services.now().getTime();
     const last = this.lastTickError;
     if (last && last.message === message && at - last.at < 60_000) {
@@ -138,7 +139,8 @@ export class JobRunner {
           status: 'running',
           lockedBy: this.options.workerId,
           leaseExpiresAt: new Date(current.getTime() + this.leaseMs),
-          startedAt: sql`coalesce(${schema.syncJobs.startedAt}, ${current})`,
+          // Raw fragments must not receive Date objects: the postgres.js driver cannot serialise them.
+          startedAt: sql`coalesce(${schema.syncJobs.startedAt}, ${current.toISOString()}::timestamptz)`,
           attempts: sql`${schema.syncJobs.attempts} + 1`,
           updatedAt: current,
         })

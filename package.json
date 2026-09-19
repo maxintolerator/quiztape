@@ -22,7 +22,8 @@
     "db:migrate": "npm run migrate -w @quiztape/db",
     "check:platforms": "npm run export:all -w @quiztape/client",
     "doctor": "npm run doctor -w @quiztape/client",
-    "db:check": "npm run check -w @quiztape/db"
+    "db:check": "npm run check -w @quiztape/db",
+    "db:jobs": "npm run jobs -w @quiztape/db"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

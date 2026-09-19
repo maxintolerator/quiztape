@@ -24,7 +24,8 @@
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "render-docs": "tsx scripts/render-schema.ts",
-    "check": "tsx scripts/db-check.ts"
+    "check": "tsx scripts/db-check.ts",
+    "jobs": "tsx scripts/db-jobs.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

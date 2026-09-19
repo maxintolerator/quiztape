@@ -23,7 +23,7 @@ export default function ConnectScreen() {
       const result = await startConnect();
       if (result.type === 'code') {
         await exchangeCode(result.code);
-        router.replace('/home');
+        router.replace('/sync');
       } else if (result.type === 'error') {
         setError(describeError(result.error));
       }

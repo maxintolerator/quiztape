@@ -51,6 +51,7 @@ npm run render-docs -w @quiztape/db   # regenerate docs/SCHEMA.md after a schema
 - TypeScript strict everywhere, including `exactOptionalPropertyTypes` (optional fields are declared `T | undefined` when callers may pass undefined).
 - Tests live next to code as `*.test.ts` and run under vitest with fake timers for anything time-based.
 - snake_case in Postgres, camelCase in TypeScript; Drizzle's `casing: 'snake_case'` does the mapping.
+- Never interpolate a JavaScript `Date` into a raw `sql\`...\`` fragment; pass `date.toISOString()` with a `::timestamptz` cast. Typed column writes are fine. PGlite tolerates the Date, the postgres.js driver throws, so this only shows up against a real database.
 - Design tokens live in `apps/client/src/theme/tokens.ts`. Magenta is Side A, cyan is Side B.
 - Keep state simple: Zustand or React context. No heavy state library.
 

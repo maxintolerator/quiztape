@@ -1,5 +1,6 @@
 import '@/global.css';
 
+import { isLibraryReady } from '@quiztape/shared';
 import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -27,8 +28,13 @@ const quiztapeTheme = {
 /** Routes reachable without a session. Everything else requires Last.fm login. */
 const PUBLIC_ROUTES = new Set(['/', '/auth/callback', '/_sitemap']);
 
+/**
+ * Three states, three doors: anonymous -> connect; authenticated but the
+ * library is still syncing -> /sync; ready -> /home and the rest of the app.
+ */
 function useAuthGate() {
   const status = useSession((s) => s.status);
+  const sync = useSession((s) => s.sync);
   const hydrate = useSession((s) => s.hydrate);
   const pathname = usePathname();
   const router = useRouter();
@@ -40,9 +46,19 @@ function useAuthGate() {
   useEffect(() => {
     if (status === 'loading') return;
     const isPublic = PUBLIC_ROUTES.has(pathname);
-    if (status === 'anonymous' && !isPublic) router.replace('/');
-    if (status === 'authenticated' && pathname === '/') router.replace('/home');
-  }, [status, pathname, router]);
+    if (status === 'anonymous') {
+      if (!isPublic) router.replace('/');
+      return;
+    }
+    // Authenticated. Unknown sync state (API unreachable) leaves the current screen alone.
+    if (sync === null) {
+      if (pathname === '/') router.replace('/sync');
+      return;
+    }
+    const ready = isLibraryReady(sync);
+    if (!ready && pathname !== '/sync' && pathname !== '/auth/callback') router.replace('/sync');
+    if (ready && (pathname === '/' || pathname === '/sync')) router.replace('/home');
+  }, [status, sync, pathname, router]);
 }
 
 export default function RootLayout() {

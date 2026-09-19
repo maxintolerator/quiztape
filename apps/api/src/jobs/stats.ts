@@ -99,7 +99,11 @@ export async function rebuildUserStats(services: Services, userId: string): Prom
     const current = now();
     await tx
       .update(schema.userSyncState)
-      .set({ statsBuiltAt: current, statsBuiltThrough: sql`coalesce(${schema.userSyncState.newestPlayedAt}, ${current})`, updatedAt: current })
+      .set({
+        statsBuiltAt: current,
+        statsBuiltThrough: sql`coalesce(${schema.userSyncState.newestPlayedAt}, ${current.toISOString()}::timestamptz)`,
+        updatedAt: current,
+      })
       .where(eq(schema.userSyncState.userId, userId));
   });
 }

@@ -24,6 +24,11 @@ export interface SyncSummary {
   lastError: string | null;
 }
 
+/** The library is playable once the backfill finished and the rollups exist. */
+export function isLibraryReady(sync: SyncSummary | null | undefined): boolean {
+  return !!sync && sync.phase === 'complete' && sync.statsBuiltAt !== null;
+}
+
 export interface UserSettingsDto {
   geoOriginEnabled: boolean;
   producerEnabled: boolean;

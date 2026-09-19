@@ -27,7 +27,7 @@ export default function AuthCallbackScreen() {
       return;
     }
     if (status === 'authenticated' && !params.code) {
-      router.replace('/home');
+      router.replace('/sync');
       return;
     }
     if (!params.code) {
@@ -36,7 +36,7 @@ export default function AuthCallbackScreen() {
     }
     started.current = true;
     exchangeCode(params.code)
-      .then(() => router.replace('/home'))
+      .then(() => router.replace('/sync'))
       .catch(() => setMessage('That sign-in code was already used or has expired. Start again.'));
   }, [params.code, params.error, status, exchangeCode, router]);
 

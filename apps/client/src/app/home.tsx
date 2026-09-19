@@ -1,10 +1,9 @@
-import { type Difficulty, DIFFICULTIES, type QuizMode, ROUND_LENGTHS, type RoundLength, type RoundStateDto, type SyncSummary } from '@quiztape/shared';
+import { type Difficulty, DIFFICULTIES, isLibraryReady, type QuizMode, ROUND_LENGTHS, type RoundLength, type RoundStateDto } from '@quiztape/shared';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { SyncProgress } from '@/components/sync-progress';
 import { TapeButton } from '@/components/tape-button';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/store/session';
@@ -22,47 +21,37 @@ const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: 'Easy', medium: 'Me
 export default function HomeScreen() {
   const user = useSession((s) => s.user);
   const token = useSession((s) => s.token);
+  const sync = useSession((s) => s.sync);
+  const refreshSync = useSession((s) => s.refreshSync);
+  const requestSync = useSession((s) => s.requestSync);
   const signOut = useSession((s) => s.signOut);
   const router = useRouter();
-  const [sync, setSync] = useState<SyncSummary | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<QuizMode>('side_a');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [length, setLength] = useState<RoundLength>(10);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
+  // Ask for anything new since the last sync once per visit; the store keeps the summary current.
   useEffect(() => {
     if (!token) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let refreshed = false;
-    const poll = async () => {
-      try {
-        const next = await api<SyncSummary>('/v1/me/sync', { token });
-        if (cancelled) return;
-        setSync(next);
-        setSyncError(null);
-        if (next.phase === 'complete' && !refreshed) {
-          refreshed = true;
-          void api('/v1/me/sync/refresh', { method: 'POST', token }).catch(() => undefined);
-        }
-        const active = next.phase === 'pending' || next.phase === 'backfilling' || (next.phase === 'complete' && !next.statsBuiltAt);
-        timer = setTimeout(poll, active ? 2_500 : 60_000);
-      } catch (error) {
-        if (cancelled) return;
-        setSyncError(error instanceof Error ? error.message : 'Could not reach the API');
-        timer = setTimeout(poll, 5_000);
-      }
-    };
-    void poll();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [token]);
+    void requestSync()
+      .catch(() => undefined)
+      .then(() => refreshSync());
+  }, [token, requestSync, refreshSync]);
 
-  const ready = sync?.phase === 'complete' && sync.scrobbleCount > 0 && sync.statsBuiltAt !== null;
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await requestSync();
+      await refreshSync();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const ready = isLibraryReady(sync) && (sync?.scrobbleCount ?? 0) > 0;
 
   const start = async () => {
     if (!token) return;
@@ -91,7 +80,15 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {sync ? <SyncProgress sync={sync} /> : <Text style={styles.muted}>{syncError ?? 'Checking your tape…'}</Text>}
+        <View style={styles.libraryRow}>
+          <Text style={styles.libraryText}>
+            {sync ? `${sync.scrobbleCount.toLocaleString()} scrobbles on tape` : 'Checking your tape…'}
+            {sync?.newestPlayedAt ? ` · latest ${new Date(sync.newestPlayedAt).toLocaleDateString()}` : ''}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => void refresh()} disabled={refreshing} style={({ pressed }) => [styles.refresh, pressed && styles.pressed]}>
+            <Text style={styles.refreshLabel}>{refreshing ? 'SYNCING…' : 'REFRESH'}</Text>
+          </Pressable>
+        </View>
 
         <Text style={styles.sectionTitle}>PICK A SIDE</Text>
         <View style={styles.modes}>
@@ -155,6 +152,10 @@ const styles = StyleSheet.create({
   signOut: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: palette.chromeDim },
   signOutLabel: { color: palette.creamMuted, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 2 },
   pressed: { opacity: 0.8 },
+  libraryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: palette.baseElevated, borderWidth: 1, borderColor: palette.chromeDim },
+  libraryText: { color: palette.creamMuted, fontFamily: fonts.mono, fontSize: 12, flex: 1 },
+  refresh: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  refreshLabel: { color: palette.cyan, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 2 },
   sectionTitle: { color: palette.creamMuted, fontFamily: fonts.mono, fontSize: 12, letterSpacing: 2 },
   modes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   modeCard: { flexBasis: '47%', flexGrow: 1, minWidth: 140, padding: spacing.md, borderRadius: radius.lg, borderWidth: 2, backgroundColor: palette.baseElevated, gap: spacing.xs },
