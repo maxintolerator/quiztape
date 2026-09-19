@@ -19,6 +19,14 @@ me.get('/', async (c) => {
   return c.json(body);
 });
 
+/** Delete the account and everything owned by it (scrobbles, rollups, rounds, sessions) in one cascade. */
+me.delete('/', async (c) => {
+  const services = c.get('services');
+  const { userId } = c.get('auth')!;
+  await services.db.delete(schema.users).where(eq(schema.users.id, userId));
+  return c.body(null, 204);
+});
+
 me.get('/sync', async (c) => {
   const services = c.get('services');
   const { userId } = c.get('auth')!;

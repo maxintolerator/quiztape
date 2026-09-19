@@ -1,6 +1,6 @@
 import { schema } from '@quiztape/db';
-import { type Difficulty, DIFFICULTIES, type QuestionOption, SIDE_A_CATEGORIES, type SideACategory } from '@quiztape/shared';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { type Difficulty, DIFFICULTIES, MIN_PLAYS_FOR_QUESTIONS, type QuestionOption, SIDE_A_CATEGORIES, type SideACategory } from '@quiztape/shared';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 
 import { stripEditionSuffix } from './normalize';
@@ -14,7 +14,12 @@ type ArtistStat = typeof schema.userArtistStats.$inferSelect;
  * moves on to another anchor or category.
  */
 export async function generateSideAQuestions(ctx: GeneratorContext, options: { difficulty: Difficulty; count: number }): Promise<GeneratedQuestion[]> {
-  const artists = await ctx.db.select().from(schema.userArtistStats).where(eq(schema.userArtistStats.userId, ctx.userId)).orderBy(schema.userArtistStats.rank);
+  // Only artists with real listening behind them; ranks stay global so "#12" still means #12 overall.
+  const artists = await ctx.db
+    .select()
+    .from(schema.userArtistStats)
+    .where(and(eq(schema.userArtistStats.userId, ctx.userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)))
+    .orderBy(schema.userArtistStats.rank);
   if (artists.length === 0) return [];
 
   const questions: GeneratedQuestion[] = [];
@@ -162,7 +167,9 @@ const GENERATORS: Record<SideACategory, Generator> = {
       else entry.second = row;
       byYear.set(row.year, entry);
     }
-    const clear = [...byYear.entries()].filter(([, e]) => e.first && e.first.playCount >= 20 && (!e.second || e.first.playCount >= e.second.playCount * 1.2));
+    const clear = [...byYear.entries()].filter(
+      ([, e]) => e.first && e.first.playCount >= MIN_PLAYS_FOR_QUESTIONS && (!e.second || e.first.playCount >= e.second.playCount * 1.2),
+    );
     if (clear.length === 0) return null;
     const preferred = clear.filter(([, e]) => e.first!.artistKey === anchor.artistKey);
     const [year, entry] = ctx.rng.pick(preferred.length > 0 ? preferred : clear);
@@ -188,12 +195,10 @@ const GENERATORS: Record<SideACategory, Generator> = {
   },
 
   stats_head_to_head: async (ctx, anchor, artists) => {
-    if (anchor.playCount < 10) return null;
     const rivals = artists.filter(
       (a) =>
         a.artistKey !== anchor.artistKey &&
         !ctx.usedArtistKeys.has(a.artistKey) &&
-        a.playCount >= 10 &&
         Math.abs(a.playCount - anchor.playCount) >= Math.max(5, Math.round(Math.max(a.playCount, anchor.playCount) * 0.2)) &&
         Math.abs(a.rank - anchor.rank) <= Math.max(10, Math.round(anchor.rank * 0.5)),
     );
@@ -260,8 +265,11 @@ function formatMonth(date: Date): string {
   return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-/** Count of ranked artists, used for the "library too thin" check. */
-export async function countRankedArtists(db: GeneratorContext['db'], userId: string): Promise<number> {
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.userArtistStats).where(eq(schema.userArtistStats.userId, userId));
+/** Artists with enough plays to be asked about, used for the "library too thin" check. */
+export async function countEligibleArtists(db: GeneratorContext['db'], userId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.userArtistStats)
+    .where(and(eq(schema.userArtistStats.userId, userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)));
   return row?.n ?? 0;
 }

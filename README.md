@@ -31,6 +31,10 @@ Prerequisites: Node 22.13+, a Postgres URL (a free Supabase project works), a La
 
 Native: `npm run ios` / `npm run android` need Xcode or Android Studio and a development build (Expo Go cannot receive the sign-in redirect). `npm run check:platforms` proves the iOS and Android bundles compile without either.
 
+## Deploy
+
+See `docs/DEPLOY.md` for the quiztape.com setup: API container on Fly.io, static web on Cloudflare Pages, Postgres on Supabase.
+
 ## Verify
 
 ```

@@ -28,12 +28,13 @@
     "jobs": "tsx scripts/db-jobs.ts"
   },
   "dependencies": {
+    "@quiztape/shared": "*",
+    "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9",
-    "@quiztape/shared": "*"
+    "tsx": "^4.23.13"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
-    "drizzle-kit": "^0.31.10"
+    "@electric-sql/pglite": "^0.5.8"
   }
 }

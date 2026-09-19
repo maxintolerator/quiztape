@@ -127,6 +127,21 @@ describe('Last.fm web auth flow', () => {
     expect((await app.request('/v1/me', { headers: { authorization: `Bearer ${token}` } })).status).toBe(401);
   });
 
+  it('deletes the account and everything it owns', async () => {
+    const start = await app.request('/v1/auth/lastfm/start?platform=web');
+    const state = new URL(new URL(start.headers.get('location')!).searchParams.get('cb')!).searchParams.get('state');
+    const callback = await app.request(`/v1/auth/lastfm/callback?state=${state}&token=TOKEN2`);
+    const code = new URL(callback.headers.get('location')!).searchParams.get('code')!;
+    const exchanged = (await (await app.request('/v1/auth/exchange', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })).json()) as { token: string };
+    const del = await app.request('/v1/me', { method: 'DELETE', headers: { authorization: `Bearer ${exchanged.token}` } });
+    expect(del.status).toBe(204);
+    expect((await app.request('/v1/me', { headers: { authorization: `Bearer ${exchanged.token}` } })).status).toBe(401);
+    const users = await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'));
+    expect(users).toHaveLength(0);
+    const jobs = await services.db.select().from(schema.syncJobs);
+    expect(jobs.every((j) => j.userId === null)).toBe(true);
+  });
+
   it('reports a Last.fm token failure back to the client instead of a 500', async () => {
     const start = await app.request('/v1/auth/lastfm/start?platform=web');
     const state = new URL(new URL(start.headers.get('location')!).searchParams.get('cb')!).searchParams.get('state');

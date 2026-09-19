@@ -1,5 +1,5 @@
 import { type Difficulty, DIFFICULTIES, isLibraryReady, type QuizMode, ROUND_LENGTHS, type RoundLength, type RoundStateDto } from '@quiztape/shared';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,6 +31,8 @@ export default function HomeScreen() {
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [length, setLength] = useState<RoundLength>(10);
   const [starting, setStarting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
   // Ask for anything new since the last sync once per visit; the store keeps the summary current.
@@ -52,6 +54,22 @@ export default function HomeScreen() {
   };
 
   const ready = isLibraryReady(sync) && (sync?.scrobbleCount ?? 0) > 0;
+
+  const deleteAccount = async () => {
+    if (!token) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 6_000);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api('/v1/me', { method: 'DELETE', token });
+    } catch {
+      // fall through: the local session is cleared either way
+    }
+    await signOut();
+  };
 
   const start = async () => {
     if (!token) return;
@@ -130,6 +148,18 @@ export default function HomeScreen() {
         <Pressable accessibilityRole="link" onPress={() => user?.lastfmUrl && void Linking.openURL(user.lastfmUrl)} style={styles.attribution}>
           <Text style={styles.attributionText}>Listening data from Last.fm · powered by AudioScrobbler</Text>
         </Pressable>
+
+        <View style={styles.footerLinks}>
+          <Link href="/privacy" style={styles.footerLink}>
+            Privacy
+          </Link>
+          <Link href="/terms" style={styles.footerLink}>
+            Terms
+          </Link>
+          <Pressable accessibilityRole="button" onPress={() => void deleteAccount()} disabled={deleting}>
+            <Text style={[styles.footerLink, confirmDelete && styles.danger]}>{deleting ? 'Deleting…' : confirmDelete ? 'Press again to delete everything' : 'Delete my account and data'}</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -171,4 +201,7 @@ const styles = StyleSheet.create({
   error: { color: palette.wrong, fontSize: 13, textAlign: 'center' },
   attribution: { alignSelf: 'center', padding: spacing.sm },
   attributionText: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11 },
+  footerLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.lg },
+  footerLink: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11, textDecorationLine: 'underline' },
+  danger: { color: palette.wrong },
 });

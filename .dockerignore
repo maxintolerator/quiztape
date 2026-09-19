@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+apps/client/dist
+apps/client/.expo
+apps/client/ios
+apps/client/android
+.git
+.github
+docs
+.env
+.env.*
+**/*.test.ts

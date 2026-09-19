@@ -26,7 +26,7 @@ const quiztapeTheme = {
 };
 
 /** Routes reachable without a session. Everything else requires Last.fm login. */
-const PUBLIC_ROUTES = new Set(['/', '/auth/callback', '/_sitemap']);
+const PUBLIC_ROUTES = new Set(['/', '/auth/callback', '/privacy', '/terms', '/_sitemap']);
 
 /**
  * Three states, three doors: anonymous -> connect; authenticated but the
@@ -56,7 +56,7 @@ function useAuthGate() {
       return;
     }
     const ready = isLibraryReady(sync);
-    if (!ready && pathname !== '/sync' && pathname !== '/auth/callback') router.replace('/sync');
+    if (!ready && !PUBLIC_ROUTES.has(pathname) && pathname !== '/sync') router.replace('/sync');
     if (ready && (pathname === '/' || pathname === '/sync')) router.replace('/home');
   }, [status, sync, pathname, router]);
 }

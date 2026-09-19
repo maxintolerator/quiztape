@@ -23,7 +23,8 @@
     "check:platforms": "npm run export:all -w @quiztape/client",
     "doctor": "npm run doctor -w @quiztape/client",
     "db:check": "npm run check -w @quiztape/db",
-    "db:jobs": "npm run jobs -w @quiztape/db"
+    "db:jobs": "npm run jobs -w @quiztape/db",
+    "legal:render": "tsx packages/shared/scripts/render-legal.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

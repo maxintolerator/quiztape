@@ -4,6 +4,7 @@ import {
   type AnswerSubmission,
   type CreateRoundRequest,
   MIN_ARTISTS_FOR_ROUND,
+  MIN_PLAYS_FOR_QUESTIONS,
   POINTS_PER_QUESTION,
   type QuestionDto,
   type RoundDto,
@@ -17,7 +18,7 @@ import { and, desc, eq, gt } from 'drizzle-orm';
 import type { Services } from '../services';
 import { awardPoints, grade } from './grading';
 import { createRng, randomSeed } from './rng';
-import { countRankedArtists, generateSideAQuestions } from './side-a';
+import { countEligibleArtists, generateSideAQuestions } from './side-a';
 import type { GeneratedQuestion } from './types';
 
 export const GENERATOR_VERSION = 'side-a.v1';
@@ -45,9 +46,13 @@ export async function createRound(services: Services, userId: string, request: C
   if (!sync || sync.phase !== 'complete' || !sync.statsBuiltAt) {
     throw new RoundError(409, 'library_not_ready', 'Your listening history is still syncing. Rounds unlock when it is on tape.');
   }
-  const ranked = await countRankedArtists(db, userId);
-  if (ranked < MIN_ARTISTS_FOR_ROUND) {
-    throw new RoundError(409, 'library_too_thin', `Quiztape needs at least ${MIN_ARTISTS_FOR_ROUND} artists in your history to cut a round; you have ${ranked}.`);
+  const eligible = await countEligibleArtists(db, userId);
+  if (eligible < MIN_ARTISTS_FOR_ROUND) {
+    throw new RoundError(
+      409,
+      'library_too_thin',
+      `Quiztape needs at least ${MIN_ARTISTS_FOR_ROUND} artists with ${MIN_PLAYS_FOR_QUESTIONS}+ plays to cut a round; you have ${eligible}. Keep scrobbling.`,
+    );
   }
   const [settings] = await db.select().from(schema.userSettings).where(eq(schema.userSettings.userId, userId)).limit(1);
   const timerSeconds = settings?.timerSeconds ?? 20;

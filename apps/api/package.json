@@ -17,6 +17,7 @@
     "@quiztape/ratelimit": "*",
     "@quiztape/shared": "*",
     "hono": "^4.13.8",
+    "tsx": "^4.23.13",
     "zod": "^4.6.5"
   },
   "devDependencies": {

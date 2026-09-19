@@ -1,0 +1,36 @@
+# Fly.io config for the Quiztape API. Adjust `app` and `primary_region`, then:
+#   fly launch --copy-config --no-deploy && fly secrets set ... && fly deploy
+app = "quiztape-api"
+primary_region = "fra"
+
+[build]
+  dockerfile = "apps/api/Dockerfile"
+
+[deploy]
+  # Apply pending migrations before the new version takes traffic.
+  release_command = "npm run db:migrate"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  WORKER_ENABLED = "true"
+  WORKER_ID = "fly-1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # The job runner lives in this process: never let Fly stop the machine.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

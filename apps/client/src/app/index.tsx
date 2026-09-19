@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,6 +54,14 @@ export default function ConnectScreen() {
             {Platform.OS === 'web' ? 'You will be sent to Last.fm and straight back.' : 'Opens Last.fm in a secure browser sheet.'}
           </Text>
         )}
+        <View style={styles.legal}>
+          <Link href="/privacy" style={styles.legalLink}>
+            Privacy
+          </Link>
+          <Link href="/terms" style={styles.legalLink}>
+            Terms
+          </Link>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -84,4 +92,6 @@ const styles = StyleSheet.create({
   button: { marginTop: spacing.md },
   footnote: { color: palette.chrome, fontSize: 12, textAlign: 'center' },
   error: { color: palette.wrong, fontSize: 14, textAlign: 'center' },
+  legal: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.lg },
+  legalLink: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1, textDecorationLine: 'underline' },
 });

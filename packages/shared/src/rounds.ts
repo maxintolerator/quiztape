@@ -93,5 +93,7 @@ export interface CreateRoundRequest {
 /** Base points per question; a speed bonus of up to half again is added for quick correct answers. */
 export const POINTS_PER_QUESTION = 100;
 export const SPEED_BONUS_MAX = 50;
-/** Fewer ranked artists than this and Side A cannot build a round. */
+/** Fewer eligible artists than this and Side A cannot build a round. */
 export const MIN_ARTISTS_FOR_ROUND = 8;
+/** Artists below this many plays are too thin to ask about; they never become anchors, rivals or options. */
+export const MIN_PLAYS_FOR_QUESTIONS = 50;

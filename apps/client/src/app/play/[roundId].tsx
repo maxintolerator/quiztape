@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   feedback: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 2, backgroundColor: palette.baseElevated },
   verdict: { fontFamily: fonts.display, fontSize: 32, letterSpacing: 2 },
   answerLabel: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 2 },
-  answer: { color: palette.cream, fontSize: 20, fontFamily: fonts.marker },
+  answer: { color: palette.cream, fontSize: 20, fontWeight: '700' },
   yours: { color: palette.creamMuted, fontFamily: fonts.mono, fontSize: 13 },
   explanation: { color: palette.creamMuted, fontSize: 13, lineHeight: 18 },
   points: { color: palette.cyan, fontFamily: fonts.mono, fontSize: 16, marginTop: spacing.xs },
