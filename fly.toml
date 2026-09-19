@@ -1,7 +1,7 @@
 # Fly.io config for the Quiztape API. Adjust `app` and `primary_region`, then:
-#   fly launch --copy-config --no-deploy && fly secrets set ... && fly deploy
+#   flyctl launch --copy-config --no-deploy && flyctl secrets set ... && flyctl deploy
 app = "quiztape-api"
-primary_region = "fra"
+primary_region = "iad"
 
 [build]
   dockerfile = "apps/api/Dockerfile"

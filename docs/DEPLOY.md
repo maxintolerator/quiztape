@@ -5,7 +5,7 @@ Three pieces, three hosts. The API is a long-running Node process (it carries th
 | Piece | Host | URL |
 | --- | --- | --- |
 | Web app (Expo static export) | Cloudflare Pages (or Vercel / Netlify) | `https://quiztape.com`, `https://www.quiztape.com` |
-| API + job runner (Docker) | Fly.io (or Railway / Render, anything that runs a container 24/7) | `https://api.quiztape.com` |
+| API + job runner (Docker) | Fly.io, region `iad` (or Railway / Render, anything that runs a container 24/7) | `https://api.quiztape.com` |
 | Postgres | Supabase (existing project) | pooler on 6543 for the API, direct 5432 for migrations |
 
 Serverless is deliberately not used for the API: the backfill runs for minutes per user and needs a process that stays up.
@@ -13,7 +13,8 @@ Serverless is deliberately not used for the API: the backfill runs for minutes p
 ## 0. Before you start
 
 - Domain `quiztape.com` at a registrar where you can edit DNS.
-- Accounts: Fly.io (`brew install flyctl` or the installer from fly.io; `fly auth login`), Cloudflare (Pages), Supabase (existing).
+- Accounts: Fly.io, Cloudflare (Pages), Supabase (existing).
+- Fly.io CLI: `curl -L https://fly.io/install.sh | sh`, then add `~/.fly/bin` to your PATH and run `flyctl auth login`. The command is `flyctl`; do not `npm install -g fly`, that is an unrelated JavaScript task runner.
 - Fill the remaining placeholders in `packages/shared/src/legal.ts` (hosting provider regions, your US state for governing law) and rebuild; the pages are served at `/privacy` and `/terms`. Apple and Google require the privacy policy URL for store listings.
 - Last.fm's terms: before opening the app to the public, email partners@last.fm about the 100 MB storage cap and non-commercial use (see `docs/COMPLIANCE.md`).
 
@@ -41,24 +42,24 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 From the repository root (the Dockerfile expects the repo as build context):
 
 ```
-fly launch --copy-config --no-deploy        # uses fly.toml; pick your org, keep the app name or change it in fly.toml
-fly secrets set DATABASE_URL='...' DATABASE_MIGRATE_URL='...' \
+flyctl launch --copy-config --no-deploy     # uses fly.toml; answer "No" to tweaking settings; if the name is taken pick another
+flyctl secrets set DATABASE_URL='...' DATABASE_MIGRATE_URL='...' \
   LASTFM_API_KEY='...' LASTFM_API_SECRET='...' \
   LASTFM_CALLBACK_URL='https://api.quiztape.com/v1/auth/lastfm/callback' \
   CORS_ORIGINS='https://quiztape.com,https://www.quiztape.com' \
-  MUSICBRAINZ_CONTACT='you@example.com' SESSION_SECRET='...'
-fly deploy                                   # builds the image, runs `npm run db:migrate` as the release command, starts one machine
-fly logs                                     # expect: "quiztape-api listening" and "job runner fly-1 started"
+  MUSICBRAINZ_CONTACT='max@intolerator.com' SESSION_SECRET='...'
+flyctl deploy                                # remote build of apps/api/Dockerfile, runs `npm run db:migrate`, starts one machine
+flyctl logs                                  # expect: "quiztape-api listening" and "job runner fly-1 started"
 ```
 
 Custom domain:
 
 ```
-fly certs add api.quiztape.com
-fly certs show api.quiztape.com              # shows the DNS records to create
+flyctl certs add api.quiztape.com
+flyctl certs show api.quiztape.com           # shows the DNS records to create
 ```
 
-At your registrar: `CNAME api -> quiztape-api.fly.dev` (or the A/AAAA records Fly lists). Wait for the certificate, then:
+At your registrar: `CNAME api -> <your-app-name>.fly.dev` (or the A/AAAA records Fly lists). Wait for `flyctl certs check api.quiztape.com` to report the certificate as issued, then:
 
 ```
 curl https://api.quiztape.com/health
@@ -106,7 +107,7 @@ Add `"env": { "EXPO_PUBLIC_API_URL": "https://api.quiztape.com" }` to the `previ
 
 ## 7. Operating it
 
-- Logs: `fly logs`. Job state: `npm run db:jobs` with production URLs in `.env`.
+- Logs: `flyctl logs`. Job state: `npm run db:jobs` with production URLs in `.env`.
 - Backups: enable Supabase's daily backups (Settings, Database).
-- Deploys: `fly deploy` runs migrations first; the job runner hands back any in-flight job on shutdown and resumes from its checkpoint.
+- Deploys: `flyctl deploy` runs migrations first; the job runner hands back any in-flight job on shutdown and resumes from its checkpoint.
 - Secret rotation: a new `SESSION_SECRET` means every user reconnects Last.fm once (the `key_version` column exists for a gentler rotation later).
