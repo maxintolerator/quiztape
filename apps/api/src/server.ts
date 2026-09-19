@@ -1,5 +1,9 @@
 import { serve } from '@hono/node-server';
 
+import { loadDotenv } from './load-env';
+
+loadDotenv();
+
 import { createApp } from './app';
 import { loadEnv } from './env';
 import { handlers } from './jobs/handlers';
