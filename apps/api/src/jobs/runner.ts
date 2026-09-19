@@ -174,8 +174,16 @@ export class JobRunner {
         .set({ status: 'succeeded', finishedAt: current, leaseExpiresAt: null, lockedBy: null, updatedAt: current })
         .where(eq(schema.syncJobs.id, job.id));
     } catch (error) {
-      this.options.onError?.(error, job);
       const current = now();
+      if (this.controller.signal.aborted) {
+        // Shutdown, not failure: hand the job back immediately and do not count the attempt.
+        await db
+          .update(schema.syncJobs)
+          .set({ status: 'queued', runAfter: current, leaseExpiresAt: null, lockedBy: null, attempts: sql`greatest(0, ${schema.syncJobs.attempts} - 1)`, updatedAt: current })
+          .where(eq(schema.syncJobs.id, job.id));
+        return;
+      }
+      this.options.onError?.(error, job);
       const message = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 2000) : String(error);
       const exhausted = job.attempts >= job.maxAttempts;
       const delay = Math.min(60 * 60 * 1000, this.retryBaseMs * 2 ** Math.max(0, job.attempts - 1));
