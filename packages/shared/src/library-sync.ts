@@ -1,5 +1,5 @@
 import type { HistoryPage, HistoryPageRequest } from './lastfm-history';
-import { type LocalScrobble, type SnapshotOptions, type StatsSnapshot, buildStatsSnapshot, nameKey } from './library';
+import { type LocalScrobble, type SnapshotOptions, type StatsSnapshot, buildStatsSnapshot, isPlausiblePlayTime, nameKey } from './library';
 
 /**
  * Keeping a library on the device: a resumable first import, cheap top-ups
@@ -30,7 +30,12 @@ export interface LibraryMeta {
   newestUts: number | null;
   /** When the library last caught up with Last.fm, in milliseconds. */
   syncedAt: number | null;
+  /** Which revision of the snapshot builder produced the stored snapshot; absent on libraries stored before revisions existed. */
+  snapshotBuild?: number | undefined;
 }
+
+/** Bump when `buildStatsSnapshot` changes what it produces: stored snapshots from an older revision are rebuilt from the stored plays, without touching Last.fm. */
+export const SNAPSHOT_BUILD = 2;
 
 export const IMPORT_PAGES_PER_BATCH = 4;
 /** Four pages every 0.9 s is about 4.4 requests a second, under Last.fm's five per second per IP. */
@@ -58,13 +63,18 @@ export class LibraryStore {
     await this.kv.set(`${this.prefix}meta`, JSON.stringify(meta));
   }
 
-  /** Store plays as the next chunk, then advance the meta. A crash in between leaves an orphan chunk the next write replaces. */
-  async append(meta: LibraryMeta, scrobbles: LocalScrobble[], patch: Partial<LibraryMeta> = {}): Promise<LibraryMeta> {
+  /**
+   * Store plays as the next chunk, then advance the meta. A crash in between
+   * leaves an orphan chunk the next write replaces. `nowMs` keeps a play from a
+   * device with a wrong clock from becoming "the newest": a date in the future
+   * would stop every later top-up from finding anything.
+   */
+  async append(meta: LibraryMeta, scrobbles: LocalScrobble[], patch: Partial<LibraryMeta> = {}, nowMs: number = Date.now()): Promise<LibraryMeta> {
     let next: LibraryMeta = { ...meta, ...patch };
     if (scrobbles.length > 0) {
       await this.kv.set(`${this.prefix}chunk:${meta.chunkCount}`, JSON.stringify(scrobbles));
-      const newest = scrobbles.reduce((max, row) => Math.max(max, row[0]), meta.newestUts ?? 0);
-      next = { ...next, chunkCount: meta.chunkCount + 1, storedCount: meta.storedCount + scrobbles.length, newestUts: newest };
+      const newest = scrobbles.reduce((max, row) => (isPlausiblePlayTime(row[0], nowMs) ? Math.max(max, row[0]) : max), meta.newestUts ?? 0);
+      next = { ...next, chunkCount: meta.chunkCount + 1, storedCount: meta.storedCount + scrobbles.length, newestUts: newest > 0 ? newest : null };
     }
     await this.writeMeta(next);
     return next;
@@ -156,7 +166,7 @@ export async function importLibrary(deps: LibrarySyncDeps): Promise<LibraryResul
     // The first request alone says how many pages there are.
     const count = meta.totalPages === null ? 1 : Math.min(IMPORT_PAGES_PER_BATCH, meta.totalPages - first + 1);
     const pages = await Promise.all(Array.from({ length: count }, (_, i) => fetchPage({ apiKey, username: store.username, page: first + i, to: pinnedTo, signal })));
-    meta = await store.append(meta, pages.flatMap((page) => page.scrobbles), { totalPages: meta.totalPages ?? pages[0]!.totalPages, nextPage: first + count });
+    meta = await store.append(meta, pages.flatMap((page) => page.scrobbles), { totalPages: meta.totalPages ?? pages[0]!.totalPages, nextPage: first + count }, now());
     onProgress?.({ pagesDone: meta.nextPage - 1, pagesTotal: meta.totalPages, scrobbles: meta.storedCount });
     if (meta.totalPages !== null && meta.nextPage <= meta.totalPages) await sleep(Math.max(0, IMPORT_BATCH_MIN_MS - (now() - started)), signal);
   }
@@ -173,7 +183,7 @@ export async function refreshLibrary(deps: LibrarySyncDeps): Promise<LibraryResu
   if (!meta?.complete) return importLibrary(deps);
   const before = meta.storedCount;
   const next = await fetchNewer(deps, meta);
-  const snapshot = next.storedCount === before ? await store.readSnapshot() : null;
+  const snapshot = next.storedCount === before && next.snapshotBuild === SNAPSHOT_BUILD ? await store.readSnapshot() : null;
   if (snapshot) {
     const caughtUp = { ...next, syncedAt: now() };
     await store.writeMeta(caughtUp);
@@ -189,7 +199,7 @@ export async function replaceLibrary(deps: Pick<LibrarySyncDeps, 'store' | 'now'
   await store.erase();
   let meta: LibraryMeta = { ...freshMeta(store.username, seconds(now())), totalPages: 0 };
   for (let offset = 0; offset < scrobbles.length; offset += FILE_CHUNK_ROWS) {
-    meta = await store.append(meta, scrobbles.slice(offset, offset + FILE_CHUNK_ROWS));
+    meta = await store.append(meta, scrobbles.slice(offset, offset + FILE_CHUNK_ROWS), {}, now());
   }
   const result = await finish(deps, meta);
   return { ...result, added: scrobbles.length };
@@ -209,14 +219,23 @@ async function fetchNewer(deps: LibrarySyncDeps, meta: LibraryMeta): Promise<Lib
     if (page >= result.totalPages || result.scrobbles.length === 0) break;
     await sleep(TOP_UP_PAGE_GAP_MS, signal);
   }
-  return added.length > 0 ? store.append(meta, added) : meta;
+  return added.length > 0 ? store.append(meta, added, {}, now()) : meta;
 }
 
-async function finish(deps: Pick<LibrarySyncDeps, 'store' | 'now' | 'snapshotOptions'>, meta: LibraryMeta): Promise<LibraryResult> {
+/** The stored library as it is, with its snapshot rebuilt first when an older builder revision produced it. Null when no finished library is stored. */
+export async function openLibrary(deps: Pick<LibrarySyncDeps, 'store' | 'now' | 'snapshotOptions'>): Promise<LibraryResult | null> {
+  const meta = await deps.store.readMeta();
+  if (!meta?.complete) return null;
+  const snapshot = meta.snapshotBuild === SNAPSHOT_BUILD ? await deps.store.readSnapshot() : null;
+  if (snapshot) return { meta, snapshot, added: 0 };
+  return finish(deps, meta, meta.syncedAt);
+}
+
+async function finish(deps: Pick<LibrarySyncDeps, 'store' | 'now' | 'snapshotOptions'>, meta: LibraryMeta, syncedAt: number | null = deps.now()): Promise<LibraryResult> {
   const { store, now, snapshotOptions } = deps;
-  const snapshot = buildStatsSnapshot(await store.readScrobbles(meta), snapshotOptions);
+  const snapshot = buildStatsSnapshot(await store.readScrobbles(meta), { now: now(), ...snapshotOptions });
   await store.writeSnapshot(snapshot);
-  const done: LibraryMeta = { ...meta, complete: true, syncedAt: now() };
+  const done: LibraryMeta = { ...meta, complete: true, syncedAt, snapshotBuild: SNAPSHOT_BUILD };
   await store.writeMeta(done);
   return { meta: done, snapshot, added: 0 };
 }

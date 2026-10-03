@@ -18,6 +18,18 @@ export const SNAPSHOT_TOP_ITEMS = 2;
 export const SNAPSHOT_PLAYED_TRACKS = 60;
 /** Band facts are fetched for this many of a player's most played artists. */
 export const TRIVIA_ARTIST_CAP = 50;
+/**
+ * Last.fm (as Audioscrobbler) started in 2002. Plays dated before that, or in
+ * the future, come from a device with a wrong clock: they still count as
+ * plays, but say nothing about when something was first heard or which year
+ * it belongs to.
+ */
+export const EARLIEST_PLAUSIBLE_PLAY_UTS = 1_009_843_200; // 2002-01-01T00:00:00Z
+const CLOCK_SKEW_SECONDS = 86_400;
+
+export function isPlausiblePlayTime(uts: number, nowMs: number = Date.now()): boolean {
+  return uts >= EARLIEST_PLAUSIBLE_PLAY_UTS && uts <= Math.floor(nowMs / 1000) + CLOCK_SKEW_SECONDS;
+}
 
 export interface SnapshotItem {
   key: string;
@@ -26,7 +38,7 @@ export interface SnapshotItem {
 }
 
 export interface SnapshotArtist extends SnapshotItem {
-  /** Unix seconds. */
+  /** Unix seconds; 0 when none of the artist's plays carries a believable date. */
   firstPlayedAt: number;
   lastPlayedAt: number;
   distinctTracks: number;
@@ -50,7 +62,7 @@ export interface StatsSnapshot {
   scrobbleCount: number;
   /** Distinct artists in the whole library, including those too thin to be asked about. */
   artistCount: number;
-  /** Unix seconds; null for an empty library. */
+  /** Unix seconds, from plays with a believable date; null when there are none. */
   oldestPlayedAt: number | null;
   newestPlayedAt: number | null;
   artists: SnapshotArtist[];
@@ -103,6 +115,8 @@ export function scrobbleFromRecentTrack(track: RawRecentTrack): LocalScrobble | 
 export interface SnapshotOptions {
   /** Calendar year of a play. Defaults to the device's time zone. */
   yearOf?: ((uts: number) => number) | undefined;
+  /** Milliseconds since the epoch; plays dated later than this are treated as undated. Defaults to the current time. */
+  now?: number | undefined;
 }
 
 interface ItemAcc {
@@ -120,23 +134,26 @@ interface ArtistAcc extends ItemAcc {
   mbids: Map<string, number>;
 }
 
-/** Most played first; earlier first play, then key, break ties so ranks are stable. */
+/** Most played first; earlier first play, then key, break ties so ranks are stable. Undated items (`first` = Infinity) sort last among equals. */
 function byPlays(a: ItemAcc, b: ItemAcc): number {
-  return b.plays - a.plays || a.first - b.first || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  return b.plays - a.plays || (a.first === b.first ? 0 : a.first < b.first ? -1 : 1) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 }
 
-function bump<T extends ItemAcc>(map: Map<string, T>, key: string, name: string, uts: number, create: (base: ItemAcc) => T): T {
+/** Count a play. Only a play with a believable date (`dated`) can move the first-play date or the spelling. */
+function bump<T extends ItemAcc>(map: Map<string, T>, key: string, name: string, uts: number, dated: boolean, create: (base: ItemAcc) => T): T {
   let item = map.get(key);
   if (!item) {
-    item = create({ key, name, nameAt: uts, plays: 0, first: uts });
+    item = create({ key, name, nameAt: -Infinity, plays: 0, first: Infinity });
     map.set(key, item);
   }
   item.plays++;
-  if (uts < item.first) item.first = uts;
-  // The spelling of the most recent play wins.
-  if (uts >= item.nameAt) {
-    item.name = name;
-    item.nameAt = uts;
+  if (dated) {
+    if (uts < item.first) item.first = uts;
+    // The spelling of the most recent play wins.
+    if (uts >= item.nameAt) {
+      item.name = name;
+      item.nameAt = uts;
+    }
   }
   return item;
 }
@@ -149,6 +166,7 @@ const toItem = (item: ItemAcc): SnapshotItem => ({ key: item.key, name: item.nam
  */
 export function buildStatsSnapshot(scrobbles: Iterable<LocalScrobble>, options: SnapshotOptions = {}): StatsSnapshot {
   const yearOf = options.yearOf ?? ((uts: number) => new Date(uts * 1000).getFullYear());
+  const now = options.now ?? Date.now();
   const artists = new Map<string, ArtistAcc>();
   const years = new Map<number, Map<string, ItemAcc>>();
   const seen = new Set<string>();
@@ -163,22 +181,24 @@ export function buildStatsSnapshot(scrobbles: Iterable<LocalScrobble>, options: 
     if (seen.has(id)) continue;
     seen.add(id);
     scrobbleCount++;
+    const dated = isPlausiblePlayTime(uts, now);
+
+    const artist = bump(artists, artistKey, artistName, uts, dated, (base) => ({ ...base, last: -Infinity, tracks: new Map(), albums: new Map(), mbids: new Map() }));
+    bump(artist.tracks, trackKey, trackName, uts, dated, (base) => base);
+    if (albumName) bump(artist.albums, nameKey(albumName), albumName, uts, dated, (base) => base);
+    if (mbid) artist.mbids.set(mbid, (artist.mbids.get(mbid) ?? 0) + 1);
+    if (!dated) continue;
+
+    if (uts > artist.last) artist.last = uts;
     if (oldest === null || uts < oldest) oldest = uts;
     if (newest === null || uts > newest) newest = uts;
-
-    const artist = bump(artists, artistKey, artistName, uts, (base) => ({ ...base, last: uts, tracks: new Map(), albums: new Map(), mbids: new Map() }));
-    if (uts > artist.last) artist.last = uts;
-    bump(artist.tracks, trackKey, trackName, uts, (base) => base);
-    if (albumName) bump(artist.albums, nameKey(albumName), albumName, uts, (base) => base);
-    if (mbid) artist.mbids.set(mbid, (artist.mbids.get(mbid) ?? 0) + 1);
-
     const year = yearOf(uts);
     let inYear = years.get(year);
     if (!inYear) {
       inYear = new Map();
       years.set(year, inYear);
     }
-    bump(inYear, artistKey, artistName, uts, (base) => base);
+    bump(inYear, artistKey, artistName, uts, true, (base) => base);
   }
 
   const ranked = [...artists.values()].sort(byPlays);
@@ -196,8 +216,8 @@ export function buildStatsSnapshot(scrobbles: Iterable<LocalScrobble>, options: 
       const [mbidHint] = [...artist.mbids.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0] ?? [null];
       return {
         ...toItem(artist),
-        firstPlayedAt: artist.first,
-        lastPlayedAt: artist.last,
+        firstPlayedAt: Number.isFinite(artist.first) ? artist.first : 0,
+        lastPlayedAt: Number.isFinite(artist.last) ? artist.last : 0,
         distinctTracks: tracks.length,
         distinctAlbums: albums.length,
         mbidHint,

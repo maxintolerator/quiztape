@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../app';
 import { enqueueJob } from '../jobs/queue';
 import { ensureUserRows, publicUser, triviaSummary } from '../lib/users';
+import { MbidHint } from '../engine/stats';
 import { requireAuth } from '../middleware/require-auth';
 
 export const me = new Hono<AppEnv>();
@@ -31,7 +32,7 @@ const ANNOUNCE_MIN_INTERVAL_MS = 10 * 60 * 1000;
 
 const AnnounceBody = z.object({
   artists: z
-    .array(z.object({ name: z.string().min(1).max(300), rank: z.number().int().min(1).max(SNAPSHOT_MAX_ARTISTS), mbidHint: z.string().uuid().nullable() }))
+    .array(z.object({ name: z.string().min(1).max(2_000), rank: z.number().int().min(1).max(SNAPSHOT_MAX_ARTISTS), mbidHint: MbidHint }))
     .max(TRIVIA_ARTIST_CAP),
 });
 
@@ -59,7 +60,7 @@ me.post('/library', async (c) => {
   return c.json(await triviaSummary(services, userId, artists.map((a) => nameKey(a.name))));
 });
 
-const TriviaBody = z.object({ artistKeys: z.array(z.string().min(1).max(300)).max(SNAPSHOT_MAX_ARTISTS) });
+const TriviaBody = z.object({ artistKeys: z.array(z.string().min(1).max(2_000)).max(SNAPSHOT_MAX_ARTISTS) });
 
 /** Side B readiness for the artists the device names. Read-only; the client polls it while band facts load. */
 me.post('/trivia', async (c) => {

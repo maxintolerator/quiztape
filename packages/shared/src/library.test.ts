@@ -97,6 +97,25 @@ describe('buildStatsSnapshot', () => {
     ]);
   });
 
+  it('counts plays with impossible dates but never lets them set a first play, a year or the newest play', () => {
+    const now = Date.parse('2026-10-03T00:00:00Z');
+    const rows: LocalScrobble[] = [
+      ...plays(Y2020, 60, 'Dated', 'Song'),
+      ...plays(3_600, 5, 'Dated', 'Song'), // a device that thought it was 1970
+      ...plays(4_000_000_000, 5, 'Dated', 'Song'), // and one that thought it was 2096
+      ...plays(86_400, 70, 'Clockless', 'Song'), // every play of this artist is dated 1970
+    ];
+    const snapshot = buildStatsSnapshot(rows, { yearOf: utcYear, now });
+    expect(snapshot.scrobbleCount).toBe(140);
+    expect(snapshot.oldestPlayedAt).toBe(Y2020);
+    expect(snapshot.newestPlayedAt).toBe(Y2020 + 59 * 60);
+    expect(snapshot.years.map((y) => y.year)).toEqual([2020]);
+    expect(snapshot.artists.map((a) => [a.name, a.plays, a.firstPlayedAt, a.lastPlayedAt])).toEqual([
+      ['Dated', 70, Y2020, Y2020 + 59 * 60],
+      ['Clockless', 70, 0, 0], // same play count: the artist with a known first play ranks first
+    ]);
+  });
+
   it('caps the trivia artists and gives track keys only to them', () => {
     const rows = Array.from({ length: TRIVIA_ARTIST_CAP + 5 }, (_, i) => plays(Y2020 + i * 100_000, 200 - i, `Artist ${i}`, 'Song')).flat();
     const snapshot = buildStatsSnapshot(rows, { yearOf: utcYear });

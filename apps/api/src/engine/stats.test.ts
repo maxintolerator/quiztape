@@ -65,7 +65,32 @@ describe('StatsSnapshotSchema', () => {
     expect(StatsSnapshotSchema.safeParse(snapshot([artist('Radiohead', 300)])).success).toBe(true);
     expect(StatsSnapshotSchema.safeParse(snapshot(Array.from({ length: 1001 }, (_, i) => artist(`A${i}`, 60)))).success).toBe(false);
     expect(StatsSnapshotSchema.safeParse(snapshot([artist('Radiohead', -1)])).success).toBe(false);
-    expect(StatsSnapshotSchema.safeParse(snapshot([artist('Radiohead', 300, 1_600_000_000, { mbidHint: 'nope' })])).success).toBe(false);
     expect(StatsSnapshotSchema.safeParse({ ...snapshot([]), version: 2 }).success).toBe(false);
+    expect(StatsSnapshotSchema.safeParse(snapshot([artist('x'.repeat(2_001), 300)])).success).toBe(false);
+  });
+
+  it('accepts what real libraries contain: plays dated 1970, very long titles, malformed MBIDs', () => {
+    const longTitle = 'When the Pawn Hits the Conflicts He Thinks Like a King '.repeat(8).trim(); // 439 characters
+    const odd = snapshot(
+      [
+        artist('Fiona Apple', 300, 1_600_000_000, { topAlbums: [{ key: longTitle.toLowerCase(), name: longTitle, plays: 200 }], mbidHint: '12345678-1234-1234-1234-123456789abc' }),
+        artist('Clockless', 200, 0, { lastPlayedAt: 0, mbidHint: 'not-an-mbid' }),
+        artist('Radiohead', 100, 1_600_000_000, { mbidHint: 'A74B1B7F-71A5-4011-9441-D0B5E4122711' }),
+      ],
+      [{ year: 1970, top: [{ key: 'clockless', name: 'Clockless', plays: 200 }] }, { year: 2020, top: [{ key: 'fiona apple', name: 'Fiona Apple', plays: 300 }] }],
+    );
+    const parsed = StatsSnapshotSchema.safeParse({ ...odd, oldestPlayedAt: 0, newestPlayedAt: 4_000_000_000 });
+    expect(parsed.success).toBe(true);
+    // Hints that are not well-formed UUIDs become "no hint"; good ones are lower-cased.
+    expect(parsed.data!.artists.map((a) => a.mbidHint)).toEqual([null, null, 'a74b1b7f-71a5-4011-9441-d0b5e4122711']);
+
+    const stats = engineStats(parsed.data!);
+    expect(stats.years.map((y) => y.year)).toEqual([2020]);
+    expect(stats.artists.map((a) => [a.artistName, a.firstPlayedAt?.toISOString() ?? null])).toEqual([
+      ['Fiona Apple', '2020-09-13T12:26:40.000Z'],
+      ['Clockless', null],
+      ['Radiohead', '2020-09-13T12:26:40.000Z'],
+    ]);
+    expect(stats.builtThrough).toBeNull(); // a newest play in 2096 is not believable either
   });
 });

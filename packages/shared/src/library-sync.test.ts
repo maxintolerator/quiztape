@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HistoryPage, HistoryPageRequest } from './lastfm-history';
 import type { LocalScrobble } from './library';
-import { IMPORT_BATCH_MIN_MS, type KeyValueStore, LibraryStore, type LibrarySyncDeps, importLibrary, refreshLibrary, replaceLibrary } from './library-sync';
+import { IMPORT_BATCH_MIN_MS, type KeyValueStore, LibraryStore, type LibrarySyncDeps, SNAPSHOT_BUILD, importLibrary, openLibrary, refreshLibrary, replaceLibrary } from './library-sync';
 
 function memoryStore(): KeyValueStore & { map: Map<string, string> } {
   const map = new Map<string, string>();
@@ -127,6 +127,18 @@ describe('refreshLibrary', () => {
     expect(lastfm.calls.map((c) => [c.page, c.from])).toEqual([[1, T0 + 429 * 60 + 1], [2, T0 + 429 * 60 + 1]]);
   });
 
+  it('is not thrown off by a play dated in the future', async () => {
+    // Last.fm never returns such a play for a request with an end time, but a history file can carry one.
+    const future: LocalScrobble = [4_000_000_000, 'Time Traveller', 'Song', null, null];
+    const { deps, lastfm } = setup(history(120));
+    const { meta, snapshot } = await replaceLibrary(deps, [...history(120), future]);
+    expect(snapshot.scrobbleCount).toBe(121);
+    expect(snapshot.newestPlayedAt).toBe(T0 + 119 * 60);
+    expect(meta.newestUts).toBe(T0 + 119 * 60);
+    await refreshLibrary(deps);
+    expect(lastfm.calls[0]).toMatchObject({ from: T0 + 119 * 60 + 1 });
+  });
+
   it('runs a full import when no finished library is stored', async () => {
     const { deps } = setup(history(120));
     const result = await refreshLibrary(deps);
@@ -156,6 +168,24 @@ describe('replaceLibrary and the store', () => {
     await a.deps.store.erase();
     expect([...kv.map.keys()]).toEqual(['library:someone else:meta']);
     expect(await new LibraryStore(kv, 'some one').readMeta()).toBeNull();
+  });
+
+  it('opens a stored library without touching Last.fm, rebuilding a snapshot made by an older builder', async () => {
+    const { deps, lastfm } = setup(history(120));
+    expect(await openLibrary(deps)).toBeNull();
+    const imported = await importLibrary(deps);
+    expect(imported.meta.snapshotBuild).toBe(SNAPSHOT_BUILD);
+    lastfm.calls.length = 0;
+
+    // As stored by the first release: no builder revision, and a snapshot the current builder would not produce.
+    const { snapshotBuild: _dropped, ...old } = imported.meta;
+    await deps.store.writeMeta(old);
+    await deps.store.writeSnapshot({ ...imported.snapshot, years: [{ year: 1970, top: [] }] });
+    const opened = await openLibrary(deps);
+    expect(opened!.snapshot).toEqual(imported.snapshot);
+    expect(opened!.meta).toMatchObject({ snapshotBuild: SNAPSHOT_BUILD, syncedAt: imported.meta.syncedAt });
+    expect(await deps.store.readSnapshot()).toEqual(imported.snapshot);
+    expect(lastfm.calls).toHaveLength(0);
   });
 
   it('survives a corrupt record instead of throwing', async () => {

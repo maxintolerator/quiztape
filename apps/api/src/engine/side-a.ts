@@ -112,8 +112,10 @@ const GENERATORS: Record<SideACategory, Generator> = {
   },
 
   stats_discovery_order: async (ctx, anchor, artists) => {
+    if (!anchor.firstPlayedAt) return null;
     const others = ctx.rng.shuffle(artists.filter((a) => a.artistKey !== anchor.artistKey && !ctx.usedArtistKeys.has(a.artistKey))).slice(0, 12);
     const candidates = [anchor, ...others]
+      .flatMap((a) => (a.firstPlayedAt ? [{ ...a, firstPlayedAt: a.firstPlayedAt }] : []))
       .filter((a, i, arr) => arr.findIndex((b) => Math.abs(b.firstPlayedAt.getTime() - a.firstPlayedAt.getTime()) < 30 * 86_400_000) === i)
       .slice(0, 4);
     if (candidates.length < 3) return null;

@@ -60,6 +60,34 @@ describe('rounds', () => {
     await expect(res.json()).resolves.toMatchObject({ error: 'library_too_thin' });
   });
 
+  it('says what was wrong with a refused request', async () => {
+    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'medium', length: 5, stats: { ...stats, scrobbleCount: -1 } }) }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe('invalid_body');
+    expect(body.message).toContain('stats.scrobbleCount');
+  });
+
+  it('cuts a round from a library with odd data, and never asks about dates it cannot trust', async () => {
+    const odd = {
+      ...stats,
+      oldestPlayedAt: 3_600,
+      years: [{ year: 1970, top: [{ key: 'radiohead', name: 'Radiohead', plays: 500 }] }, ...stats.years],
+      artists: stats.artists.map((a, i) => ({ ...a, mbidHint: 'not-an-mbid', firstPlayedAt: i % 2 === 0 ? 3_600 : a.firstPlayedAt })),
+    };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 10, stats: odd }) }));
+      expect(created.status).toBe(201);
+      const { round } = (await created.json()) as RoundStateDto;
+      const rows = await services.db.select().from(schema.roundQuestions).where(eq(schema.roundQuestions.roundId, round.id));
+      for (const row of rows) {
+        expect(`${row.prompt} ${row.correctDisplay} ${JSON.stringify(row.payload)}`).not.toMatch(/19[67]\d/);
+        expect(row.anchorYear === null || row.anchorYear >= 2002).toBe(true);
+      }
+      await services.db.delete(schema.rounds).where(eq(schema.rounds.id, round.id));
+    }
+  });
+
   it('plays a full Side A round end to end with grading and scoring', { timeout: 60_000 }, async () => {
     const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 5, stats }) }));
     expect(created.status).toBe(201);

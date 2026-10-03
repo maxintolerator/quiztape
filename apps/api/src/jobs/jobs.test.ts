@@ -47,7 +47,7 @@ describe('announcing a library', () => {
   it('queues one ingestion job per artist, most played first, with keys derived on the server', async () => {
     const res = await announce([
       { name: 'Radiohead', rank: 1, mbidHint: 'a74b1b7f-71a5-4011-9441-d0b5e4122711' },
-      { name: '  Boards   of Canada ', rank: 2, mbidHint: null },
+      { name: '  Boards   of Canada ', rank: 2, mbidHint: 'not-an-mbid' },
     ]);
     expect(res.status).toBe(200);
     await expect(res.json() as Promise<TriviaSummary>).resolves.toEqual({ eligibleArtists: 2, resolvedArtists: 0, readyArtists: 0, ready: false, running: true });
@@ -60,6 +60,8 @@ describe('announcing a library', () => {
       ['mb_artist:boards of canada', 998, 'queued'],
     ]);
     expect(jobs[0]!.payload).toMatchObject({ task: 'artist', artistKey: 'radiohead', displayName: 'Radiohead', lastfmMbidHint: 'a74b1b7f-71a5-4011-9441-d0b5e4122711', rank: 1 });
+    // Last.fm's MBIDs are hints of mixed quality: a malformed one is dropped, not a reason to refuse the library.
+    expect(jobs[1]!.payload).toMatchObject({ artistKey: 'boards of canada', lastfmMbidHint: null });
   });
 
   it('ignores a repeat within ten minutes, and never queues the same artist twice', async () => {
@@ -78,7 +80,7 @@ describe('announcing a library', () => {
   it('caps the artists per announcement and validates the body', async () => {
     const tooMany = Array.from({ length: TRIVIA_ARTIST_CAP + 1 }, (_, i) => ({ name: `Artist ${i}`, rank: i + 1, mbidHint: null }));
     expect((await announce(tooMany)).status).toBe(400);
-    expect((await announce([{ name: 'X', rank: 1, mbidHint: 'not-an-mbid' }])).status).toBe(400);
+    expect((await announce([{ name: 'X', rank: 0, mbidHint: null }])).status).toBe(400);
     expect((await announce([{ name: '', rank: 1, mbidHint: null }])).status).toBe(400);
   });
 

@@ -8,6 +8,7 @@ import {
   fetchHistoryPage,
   importLibrary,
   nameKey,
+  openLibrary,
   parseHistoryFile,
   refreshLibrary,
   replaceLibrary,
@@ -110,12 +111,10 @@ export const useLibrary = create<LibraryState>((set, get) => {
       controller?.abort();
       await running; // a previous player's download has to wind down first
       set({ ...INITIAL, username, phase: 'loading' });
-      const store = new LibraryStore(kv, username);
-      const meta = await store.readMeta();
-      const snapshot = meta?.complete ? await store.readSnapshot() : null;
+      const stored = await openLibrary({ store: new LibraryStore(kv, username), now: () => Date.now() }).catch(() => null);
       if (get().username !== username) return;
-      if (meta && snapshot) {
-        set({ phase: 'ready', snapshot, syncedAt: meta.syncedAt, persistent: kvIsPersistent() });
+      if (stored) {
+        accept(stored);
         void get().refresh();
         return;
       }

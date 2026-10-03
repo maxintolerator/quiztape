@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../app';
 import { RoundError, abandonRound, createRound, getResults, getRoundState, submitAnswer } from '../engine/round-service';
-import { StatsSnapshotSchema } from '../engine/stats';
+import { StatsSnapshotSchema, describeIssues } from '../engine/stats';
 import { requireAuth } from '../middleware/require-auth';
 
 const CreateBody = z.object({
@@ -38,7 +38,7 @@ rounds.onError((error, c) => {
 
 rounds.post('/', async (c) => {
   const parsed = CreateBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+  if (!parsed.success) return c.json({ error: 'invalid_body', message: describeIssues(parsed.error), issues: parsed.error.issues.slice(0, 20) }, 400);
   const state = await createRound(c.get('services'), c.get('auth')!.userId, parsed.data);
   return c.json(state, 201);
 });
