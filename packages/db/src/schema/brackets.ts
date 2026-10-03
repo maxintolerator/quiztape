@@ -31,7 +31,7 @@ export const brackets = pgTable(
     uniqueIndex('brackets_share_slug_uq').on(t.shareSlug).where(sql`${t.shareSlug} is not null`),
     check('brackets_size_pow2', sql`${t.size} in (4, 8, 16, 32)`),
   ],
-);
+).enableRLS();
 
 export const bracketEntrants = pgTable(
   'bracket_entrants',
@@ -47,7 +47,7 @@ export const bracketEntrants = pgTable(
     eliminatedInRound: smallint(),
   },
   (t) => [primaryKey({ columns: [t.bracketId, t.seed] }), uniqueIndex('bracket_entrants_artist_uq').on(t.bracketId, t.artistKey)],
-);
+).enableRLS();
 
 /** One match per slot; the winner feeds `nextMatchId` at `nextSlot` (1 or 2). */
 export const bracketMatches = pgTable(
@@ -74,4 +74,4 @@ export const bracketMatches = pgTable(
     uniqueIndex('bracket_matches_slot_uq').on(t.bracketId, t.roundNo, t.matchNo),
     index('bracket_matches_next_idx').on(t.nextMatchId),
   ],
-);
+).enableRLS();

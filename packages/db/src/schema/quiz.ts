@@ -42,7 +42,7 @@ export const rounds = pgTable(
     uniqueIndex('rounds_share_slug_uq').on(t.shareSlug).where(sql`${t.shareSlug} is not null`),
     index('rounds_leaderboard_idx').on(t.mode, t.difficulty, t.score).where(sql`${t.status} = 'completed'`),
   ],
-);
+).enableRLS();
 
 export const roundQuestions = pgTable(
   'round_questions',
@@ -88,7 +88,7 @@ export const roundQuestions = pgTable(
     uniqueIndex('round_questions_position_uq').on(t.roundId, t.position),
     index('round_questions_fingerprint_idx').on(t.userId, t.fingerprint, t.createdAt),
   ],
-);
+).enableRLS();
 
 export const answers = pgTable(
   'answers',
@@ -117,7 +117,7 @@ export const answers = pgTable(
     gradedAt: createdAt(),
   },
   (t) => [uniqueIndex('answers_question_uq').on(t.questionId), index('answers_round_idx').on(t.roundId)],
-);
+).enableRLS();
 
 /** Every Claude call, for cost tracking and caching identical rephrasings. Never used for facts. */
 export const llmCalls = pgTable(
@@ -137,4 +137,4 @@ export const llmCalls = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('llm_calls_cache_key_uq').on(t.cacheKey).where(sql`${t.cacheKey} is not null`), index('llm_calls_created_idx').on(t.createdAt)],
-);
+).enableRLS();

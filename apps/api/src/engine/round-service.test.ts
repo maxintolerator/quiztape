@@ -5,14 +5,11 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app';
-import { createFakeLastfm, track } from '../fake-lastfm';
-import { handlers } from '../jobs/handlers';
-import { enqueueJob } from '../jobs/queue';
-import { JobRunner } from '../jobs/runner';
+import { track } from '../fake-lastfm';
 import { sha256Hex } from '../lib/crypto';
 import { ensureUserRows } from '../lib/users';
 import type { Services } from '../services';
-import { createTestServices } from '../testing';
+import { createTestServices, snapshotOf } from '../testing';
 
 /** A believable small library: 12 artists with distinct play counts, tracks and albums, spread over three years. */
 function buildHistory() {
@@ -35,10 +32,10 @@ let services: Services;
 let app: ReturnType<typeof createApp>;
 let token: string;
 let userId: string;
+const stats = snapshotOf(buildHistory());
 
 beforeAll(async () => {
-  const fake = createFakeLastfm({ history: buildHistory(), perPage: 200 });
-  services = await createTestServices({ fetch: fake.fetch });
+  services = await createTestServices();
   app = createApp(services);
   const [user] = await services.db.insert(schema.users).values({ lastfmUsername: 'someone', lastfmUsernameKey: 'someone' }).returning();
   userId = user!.id;
@@ -54,17 +51,17 @@ afterAll(async () => {
 const authed = (init: RequestInit = {}) => ({ ...init, headers: { ...(init.headers ?? {}), authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
 
 describe('rounds', () => {
-  it('refuses to cut a round before the library is synced', async () => {
-    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'medium', length: 5 }) }));
+  it('refuses to cut a round without a library, or from one that is too thin', async () => {
+    const missing = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'medium', length: 5 }) }));
+    expect(missing.status).toBe(400);
+    const thin = { ...stats, artists: stats.artists.slice(0, 3) };
+    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'medium', length: 5, stats: thin }) }));
     expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({ error: 'library_not_ready' });
+    await expect(res.json()).resolves.toMatchObject({ error: 'library_too_thin' });
   });
 
   it('plays a full Side A round end to end with grading and scoring', { timeout: 60_000 }, async () => {
-    await enqueueJob(services, { kind: 'backfill', userId, dedupeKey: `backfill:${userId}` });
-    await new JobRunner(services, handlers, { workerId: 'test' }).drain(); // backfill, stats, mb_ingest (no MusicBrainz scripted here: every artist fails softly)
-
-    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 5 }) }));
+    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 5, stats }) }));
     expect(created.status).toBe(201);
     const state = (await created.json()) as RoundStateDto;
     expect(state.round).toMatchObject({ status: 'active', currentIndex: 0, questionCount: 5, maxScore: 500 });
@@ -117,7 +114,7 @@ describe('rounds', () => {
 
   it('does not repeat recently asked questions across rounds', async () => {
     const first = await services.db.select({ fingerprint: schema.roundQuestions.fingerprint }).from(schema.roundQuestions).where(eq(schema.roundQuestions.userId, userId));
-    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'deep_cut', length: 5 }) }));
+    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'deep_cut', length: 5, stats }) }));
     expect(created.status).toBe(201);
     const { round } = (await created.json()) as RoundStateDto;
     const second = await services.db.select({ fingerprint: schema.roundQuestions.fingerprint }).from(schema.roundQuestions).where(eq(schema.roundQuestions.roundId, round.id));
@@ -126,10 +123,10 @@ describe('rounds', () => {
   });
 
   it('rejects modes that are not built yet and validates the body', async () => {
-    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'bracket', difficulty: 'easy', length: 5 }) }));
+    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'bracket', difficulty: 'easy', length: 5, stats }) }));
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({ error: 'mode_not_available' });
-    expect((await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 7 }) }))).status).toBe(400);
+    expect((await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 7, stats }) }))).status).toBe(400);
     expect((await app.request('/v1/rounds/00000000-0000-4000-8000-000000000000', authed())).status).toBe(404);
   });
 });

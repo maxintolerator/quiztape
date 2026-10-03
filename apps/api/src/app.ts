@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
@@ -43,6 +44,9 @@ export function createApp(services: Services, options: AppOptions = {}) {
       allowHeaders: ['Authorization', 'Content-Type'],
     }),
   );
+
+  // Round and bracket requests carry the player's library snapshot (a few hundred KB at most).
+  app.use('*', bodyLimit({ maxSize: 2 * 1024 * 1024, onError: (c) => c.json({ error: 'body_too_large' }, 413) }));
 
   app.route('/health', health);
   app.route('/v1/auth', auth);

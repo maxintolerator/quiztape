@@ -5,9 +5,10 @@ import { z } from 'zod';
 import type { AppEnv } from '../app';
 import { answerDuel, createBracket, getBracketState, pickWinner } from '../engine/bracket-service';
 import { RoundError } from '../engine/round-service';
+import { StatsSnapshotSchema } from '../engine/stats';
 import { requireAuth } from '../middleware/require-auth';
 
-const CreateBody = z.object({ size: z.union([z.literal(BRACKET_SIZES[0]), z.literal(BRACKET_SIZES[1]), z.literal(BRACKET_SIZES[2])]).default(16) });
+const CreateBody = z.object({ size: z.union([z.literal(BRACKET_SIZES[0]), z.literal(BRACKET_SIZES[1]), z.literal(BRACKET_SIZES[2])]).default(16), stats: StatsSnapshotSchema });
 const SeedBody = z.object({ seed: z.number().int().min(1).max(64) });
 
 export const brackets = new Hono<AppEnv>();
@@ -21,7 +22,7 @@ brackets.onError((error, c) => {
 brackets.post('/', async (c) => {
   const parsed = CreateBody.safeParse((await c.req.json().catch(() => ({}))) ?? {});
   if (!parsed.success) return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
-  return c.json(await createBracket(c.get('services'), c.get('auth')!.userId, parsed.data.size), 201);
+  return c.json(await createBracket(c.get('services'), c.get('auth')!.userId, parsed.data.size, parsed.data.stats), 201);
 });
 
 brackets.get('/:bracketId', async (c) => c.json(await getBracketState(c.get('services'), c.get('auth')!.userId, c.req.param('bracketId'))));

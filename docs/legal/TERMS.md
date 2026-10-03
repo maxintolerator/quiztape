@@ -1,6 +1,6 @@
 # Terms of Use
 
-_Effective 2026-09-19. Source of truth: `packages/shared/src/legal.ts`, served in-app at /terms. Regenerate with `npm run legal:render`._
+_Effective 2026-10-03. Source of truth: `packages/shared/src/legal.ts`, served in-app at /terms. Regenerate with `npm run legal:render`._
 
 Quiztape is a free, non-commercial music quiz made by one person for fun. These terms keep expectations honest on both sides. By connecting your Last.fm account you agree to them; if you do not, please do not use Quiztape.
 
@@ -24,7 +24,7 @@ Music facts come from MusicBrainz and Wikidata, whose data is released under CC0
 
 ## Availability and changes
 
-Quiztape may change, break or shut down at any time without notice. Features can be added or removed, and your history may need to be re-imported after changes. There is no service level commitment of any kind.
+Quiztape may change, break or shut down at any time without notice. Features can be added or removed, and your history may need to be downloaded again after changes. There is no service level commitment of any kind.
 
 ## No warranty
 

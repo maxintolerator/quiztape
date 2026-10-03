@@ -8,12 +8,14 @@ import {
   type BracketStateDto,
   type DuelResultDto,
   MIN_PLAYS_FOR_QUESTIONS,
+  type StatsSnapshot,
   seedingOrder,
 } from '@quiztape/shared';
-import { and, eq, gte } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type { Services } from '../services';
 import { RoundError } from './round-service';
+import { engineStats } from './stats';
 
 type BracketRow = typeof schema.brackets.$inferSelect;
 type MatchRow = typeof schema.bracketMatches.$inferSelect;
@@ -21,21 +23,14 @@ type EntrantRow = typeof schema.bracketEntrants.$inferSelect;
 
 /**
  * Single elimination seeded from the user's most played artists. Each match
- * has two beats: a duel ("which did you play more?", scored against the
- * rollups) and a pick (who advances, the player's call). The champion is
+ * has two beats: a duel ("which did you play more?", scored against the play
+ * counts the bracket was seeded with) and a pick (who advances, the player's call). The champion is
  * therefore the player's favourite, the duel score is their recall.
  */
-export async function createBracket(services: Services, userId: string, requested: BracketSize): Promise<BracketStateDto> {
+export async function createBracket(services: Services, userId: string, requested: BracketSize, snapshot: StatsSnapshot): Promise<BracketStateDto> {
   const { db, now } = services;
-  const [sync] = await db.select().from(schema.userSyncState).where(eq(schema.userSyncState.userId, userId)).limit(1);
-  if (!sync || sync.phase !== 'complete' || !sync.statsBuiltAt) throw new RoundError(409, 'library_not_ready', 'Your listening history is still syncing.');
-
-  const top = await db
-    .select()
-    .from(schema.userArtistStats)
-    .where(and(eq(schema.userArtistStats.userId, userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)))
-    .orderBy(schema.userArtistStats.rank)
-    .limit(Math.max(...BRACKET_SIZES));
+  const stats = engineStats(snapshot);
+  const top = stats.artists.slice(0, Math.max(...BRACKET_SIZES));
   const size = [...BRACKET_SIZES].reverse().find((s) => s <= requested && s <= top.length) ?? null;
   if (!size) throw new RoundError(409, 'library_too_thin', `A bracket needs at least ${BRACKET_SIZES[0]} artists with ${MIN_PLAYS_FOR_QUESTIONS}+ plays; you have ${top.length}.`);
   const roundCount = Math.log2(size);
@@ -44,7 +39,7 @@ export async function createBracket(services: Services, userId: string, requeste
   const state = await db.transaction(async (tx) => {
     const [bracket] = await tx
       .insert(schema.brackets)
-      .values({ userId, size, roundCount, status: 'active', currentRound: 1, statsSnapshotAt: sync.statsBuiltThrough, createdAt: current })
+      .values({ userId, size, roundCount, status: 'active', currentRound: 1, statsSnapshotAt: stats.builtThrough, createdAt: current })
       .returning();
     await tx.insert(schema.bracketEntrants).values(
       top.slice(0, size).map((artist, index) => ({

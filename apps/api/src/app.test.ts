@@ -99,20 +99,20 @@ describe('Last.fm web auth flow', () => {
     expect(again.status).toBe(400);
   });
 
-  it('stores the Last.fm session key encrypted and queues a backfill', async () => {
+  it('stores the Last.fm session key encrypted and queues nothing: the history is the device\'s job', async () => {
     const [user] = await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'));
     expect(user?.realName).toBe('Some One');
     const sessions = await services.db.select().from(schema.lastfmSessions).where(eq(schema.lastfmSessions.userId, user!.id));
     expect(sessions).toHaveLength(1);
     expect(Buffer.from(sessions[0]!.sessionKeyCiphertext).toString('utf8')).not.toContain('a'.repeat(32));
     const jobs = await services.db.select().from(schema.syncJobs).where(eq(schema.syncJobs.userId, user!.id));
-    expect(jobs.map((j) => j.kind)).toEqual(['backfill']);
+    expect(jobs).toEqual([]);
   });
 
   it('serves /v1/me with the bearer token and revokes it on logout', async () => {
     const me = await app.request('/v1/me', { headers: { authorization: `Bearer ${token}` } });
     expect(me.status).toBe(200);
-    await expect(me.json()).resolves.toMatchObject({ user: { lastfmUsername: 'someone' }, sync: { phase: 'pending' } });
+    await expect(me.json()).resolves.toEqual({ user: expect.objectContaining({ lastfmUsername: 'someone' }), lastfm: { apiKey: 'KEY' } });
 
     const settings = await app.request('/v1/me/settings', {
       method: 'PATCH',

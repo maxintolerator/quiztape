@@ -2,6 +2,7 @@ import { createTestDb } from '@quiztape/db/testing';
 import { LastfmClient } from '@quiztape/lastfm';
 import { MusicBrainzClient } from '@quiztape/musicbrainz';
 import { RateLimiter } from '@quiztape/ratelimit';
+import { type LocalScrobble, type RawRecentTrack, type StatsSnapshot, buildStatsSnapshot, scrobbleFromRecentTrack } from '@quiztape/shared';
 
 import { deriveKey } from './lib/crypto';
 import type { Services } from './services';
@@ -26,6 +27,7 @@ export async function createTestServices(options: { fetch?: FakeFetch; now?: () 
     config: {
       apiBaseUrl: 'http://localhost:8787',
       lastfmCallbackUrl: 'http://localhost:8787/v1/auth/lastfm/callback',
+      lastfmApiKey: 'KEY',
       corsOrigins: ['http://localhost:8081'],
       allowedReturnOrigins: ['http://localhost:8081'],
       nativeScheme: 'quiztape',
@@ -38,4 +40,10 @@ export async function createTestServices(options: { fetch?: FakeFetch; now?: () 
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+/** What a player's device would send for this history: the same shared code the client runs, with UTC years so tests do not depend on the machine's time zone. */
+export function snapshotOf(history: RawRecentTrack[]): StatsSnapshot {
+  const scrobbles = history.map(scrobbleFromRecentTrack).filter((s): s is LocalScrobble => s !== null);
+  return buildStatsSnapshot(scrobbles, { yearOf: (uts) => new Date(uts * 1000).getUTCFullYear() });
 }

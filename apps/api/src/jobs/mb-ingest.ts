@@ -1,7 +1,7 @@
 import { schema } from '@quiztape/db';
 import { HttpError } from '@quiztape/ratelimit';
-import { MIN_PLAYS_FOR_QUESTIONS } from '@quiztape/shared';
-import { and, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { type LibraryArtistRef, TRIVIA_ARTIST_CAP, nameKey } from '@quiztape/shared';
+import { eq } from 'drizzle-orm';
 
 import { ingestArtist, ingestDiscography, ingestMembers, ingestTracklists, resolveArtist } from '../ingest/musicbrainz';
 import type { Services } from '../services';
@@ -23,8 +23,8 @@ interface ArtistTask {
 
 /**
  * Two shapes share the `mb_ingest` kind:
- *  - user job (no payload.task): lists the user's eligible artists and queues
- *    one artist job each, most played first. Finishes in seconds.
+ *  - user job (payload.artists): the player's most played artists, as announced
+ *    by their device; queues one artist job each. Finishes in seconds.
  *  - artist job (payload.task = 'artist'): resolves and ingests one artist.
  *    Deduplicated by artist key across users, prioritised by rank, so several
  *    machines (one MusicBrainz request per second each) and several users
@@ -37,33 +37,29 @@ export const mbIngestJob: JobHandler = async (ctx) => {
 };
 
 const fanOutUser: JobHandler = async ({ services, job, heartbeat }) => {
-  const { db } = services;
   if (!job.userId) throw new Error('mb_ingest job without userId');
-  const eligible = await db
-    .select({ artistKey: schema.userArtistStats.artistKey, artistName: schema.userArtistStats.artistName, rank: schema.userArtistStats.rank })
-    .from(schema.userArtistStats)
-    .where(and(eq(schema.userArtistStats.userId, job.userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)))
-    .orderBy(schema.userArtistStats.rank);
+  const announced = ((job.payload as { artists?: LibraryArtistRef[] }).artists ?? []).slice(0, TRIVIA_ARTIST_CAP);
 
   let queued = 0;
   let skipped = 0;
-  for (const artist of eligible) {
-    if (await isFresh(services, artist.artistKey)) {
+  for (const artist of announced) {
+    // The key is always derived here: the cache is shared, a client-chosen key could point one artist's name at another's facts.
+    const artistKey = nameKey(artist.name);
+    if (!artistKey || (await isFresh(services, artistKey))) {
       skipped++;
       continue;
     }
-    const hint = await topHint(db, job.userId, artist.artistKey);
-    const task: ArtistTask = { task: 'artist', artistKey: artist.artistKey, displayName: artist.artistName, lastfmMbidHint: hint, rank: artist.rank };
+    const task: ArtistTask = { task: 'artist', artistKey, displayName: artist.name, lastfmMbidHint: artist.mbidHint, rank: artist.rank };
     const id = await enqueueJob(services, {
       kind: 'mb_ingest',
-      dedupeKey: `mb_artist:${artist.artistKey}`,
+      dedupeKey: `mb_artist:${artistKey}`,
       userId: job.userId,
       priority: Math.max(0, 1000 - artist.rank),
       payload: { ...task },
     });
     if (id !== null) queued++;
   }
-  await heartbeat({ artistsTotal: eligible.length, queued, skipped });
+  await heartbeat({ artistsTotal: announced.length, queued, skipped });
 };
 
 async function ingestOneArtist(ctx: Parameters<JobHandler>[0], task: ArtistTask): Promise<void> {
@@ -98,16 +94,4 @@ async function isFresh(services: Services, artistKey: string): Promise<boolean> 
   if (resolution.status !== 'resolved' || !resolution.mbid) return !!resolution.nextAttemptAt && resolution.nextAttemptAt.getTime() > now().getTime();
   const [artist] = await db.select({ tracklistsFetchedAt: schema.mbArtists.tracklistsFetchedAt }).from(schema.mbArtists).where(eq(schema.mbArtists.mbid, resolution.mbid)).limit(1);
   return !!artist?.tracklistsFetchedAt && artist.tracklistsFetchedAt.getTime() > now().getTime() - FRESH_DAYS * 86_400_000;
-}
-
-/** The MBID Last.fm attached most often to this artist's plays; a hint, never trusted blindly. */
-async function topHint(db: Services['db'], userId: string, artistKey: string): Promise<string | null> {
-  const [row] = await db
-    .select({ hint: schema.scrobbles.artistMbidHint, n: sql<number>`count(*)::int` })
-    .from(schema.scrobbles)
-    .where(and(eq(schema.scrobbles.userId, userId), eq(schema.scrobbles.artistKey, artistKey), isNotNull(schema.scrobbles.artistMbidHint)))
-    .groupBy(schema.scrobbles.artistMbidHint)
-    .orderBy(desc(sql`count(*)`))
-    .limit(1);
-  return row?.hint ?? null;
 }

@@ -1,11 +1,11 @@
 import '@/global.css';
 
-import { isLibraryReady } from '@quiztape/shared';
 import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { useLibrary } from '@/store/library';
 import { useSession } from '@/store/session';
 import { useBrandFonts } from '@/theme/fonts';
 import { palette } from '@/theme/tokens';
@@ -30,18 +30,26 @@ const PUBLIC_ROUTES = new Set(['/', '/auth/callback', '/privacy', '/terms', '/_s
 
 /**
  * Three states, three doors: anonymous -> connect; authenticated but the
- * library is still syncing -> /sync; ready -> /home and the rest of the app.
+ * library is not on this device yet -> /sync; ready -> /home and the rest of the app.
  */
 function useAuthGate() {
   const status = useSession((s) => s.status);
-  const sync = useSession((s) => s.sync);
+  const user = useSession((s) => s.user);
+  const apiKey = useSession((s) => s.lastfmApiKey);
   const hydrate = useSession((s) => s.hydrate);
+  const openLibrary = useLibrary((s) => s.open);
+  const ready = useLibrary((s) => s.phase === 'ready' && (s.snapshot?.scrobbleCount ?? 0) > 0);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // The library belongs to the signed-in player; reading it needs the Last.fm key the API hands out.
+  useEffect(() => {
+    if (status === 'authenticated' && user && apiKey) void openLibrary(user.lastfmUsername, apiKey);
+  }, [status, user, apiKey, openLibrary]);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -50,15 +58,10 @@ function useAuthGate() {
       if (!isPublic) router.replace('/');
       return;
     }
-    // Authenticated. Unknown sync state (API unreachable) leaves the current screen alone.
-    if (sync === null) {
-      if (pathname === '/') router.replace('/sync');
-      return;
-    }
-    const ready = isLibraryReady(sync);
-    if (!ready && !PUBLIC_ROUTES.has(pathname) && pathname !== '/sync') router.replace('/sync');
+    // Authenticated. Everything short of a playable library (still importing, blocked, empty, API unreachable) is the sync screen's job.
+    if (!ready && pathname !== '/sync' && (pathname === '/' || !isPublic)) router.replace('/sync');
     if (ready && (pathname === '/' || pathname === '/sync')) router.replace('/home');
-  }, [status, sync, pathname, router]);
+  }, [status, ready, pathname, router]);
 }
 
 export default function RootLayout() {

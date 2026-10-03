@@ -1,150 +1,139 @@
 import { schema } from '@quiztape/db';
-import { and, eq } from 'drizzle-orm';
+import { TRIVIA_ARTIST_CAP, type TriviaSummary } from '@quiztape/shared';
+import { and, eq, like } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createFakeLastfm, track } from '../fake-lastfm';
-import { ensureUserRows, syncSummary } from '../lib/users';
+import { createApp } from '../app';
+import { sha256Hex } from '../lib/crypto';
+import { ensureUserRows } from '../lib/users';
 import type { Services } from '../services';
 import { createTestServices } from '../testing';
 import { handlers } from './handlers';
 import { enqueueJob } from './queue';
 import { JobRunner } from './runner';
 
-const T0 = 1_600_000_000;
-const history = [
-  track(T0 + 0, 'Boards of Canada', 'Roygbiv', 'Music Has the Right to Children'),
-  track(T0 + 300, 'Boards of Canada', 'Aquarius', 'Music Has the Right to Children'),
-  track(T0 + 600, 'Boards of Canada', 'Roygbiv', 'Music Has the Right to Children'),
-  track(T0 + 900, 'Radiohead', 'Airbag', 'OK Computer'),
-  track(T0 + 1200, 'Radiohead', 'Airbag', 'OK Computer'),
-  track(T0 + 1500, 'Radiohead', 'Airbag', 'OK Computer'),
-  track(T0 + 1800, 'Radiohead', 'Lucky', 'OK Computer'),
-  track(T0 + 31_536_000 + 100, 'Autechre', 'Bike', 'Incunabula'),
-];
-
 let services: Services;
+let app: ReturnType<typeof createApp>;
 let clock = Date.now();
-const { date: _ignored, ...nowPlayingBase } = track(0, 'Now', 'Playing');
-const fake = createFakeLastfm({
-  history,
-  perPage: 3,
-  nowPlaying: { ...nowPlayingBase, '@attr': { nowplaying: 'true' } },
-});
 let userId: string;
+const token = 'test-token-' + 'j'.repeat(30);
 
 beforeAll(async () => {
-  services = await createTestServices({ fetch: fake.fetch, now: () => new Date(clock) });
+  services = await createTestServices({ now: () => new Date(clock) });
+  app = createApp(services);
   const [user] = await services.db.insert(schema.users).values({ lastfmUsername: 'someone', lastfmUsernameKey: 'someone' }).returning();
   userId = user!.id;
   await ensureUserRows(services, userId);
+  await services.db.insert(schema.appSessions).values({ userId, tokenHash: sha256Hex(token), platform: 'web', expiresAt: new Date(clock + 86_400_000) });
 }, 120_000);
 
 afterAll(async () => {
   await services?.close();
 });
 
-describe('backfill and rollups', () => {
-  it('imports the whole history page by page, skips now-playing, dedupes, then rebuilds stats', async () => {
-    await enqueueJob(services, { kind: 'backfill', userId, dedupeKey: `backfill:${userId}` });
-    // Queueing the same work twice is a no-op while it is pending.
-    expect(await enqueueJob(services, { kind: 'backfill', userId, dedupeKey: `backfill:${userId}` })).toBeNull();
+const announce = (artists: unknown) =>
+  app.request('/v1/me/library', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ artists }) });
 
-    const runner = new JobRunner(services, handlers, { workerId: 'test', retryBaseMs: 1 });
-    const ran = await runner.drain();
-    expect(ran).toBe(3); // backfill, the stats_rebuild it queued, then the mb_ingest the rebuild queued
+const artistJobs = () =>
+  services.db
+    .select()
+    .from(schema.syncJobs)
+    .where(and(eq(schema.syncJobs.kind, 'mb_ingest'), like(schema.syncJobs.dedupeKey, 'mb_artist:%')))
+    .orderBy(schema.syncJobs.id);
 
-    const recentTrackCalls = fake.state.calls.filter((u) => u.searchParams.get('method') === 'user.getRecentTracks');
-    expect(recentTrackCalls).toHaveLength(3); // 8 tracks / 3 per page
-    expect(recentTrackCalls[0]!.searchParams.get('to')).toBe(String(Math.floor(clock / 1000)));
-    expect(recentTrackCalls[0]!.searchParams.get('extended')).toBe('1');
+const fanOutJobs = () => services.db.select().from(schema.syncJobs).where(eq(schema.syncJobs.dedupeKey, `mb_ingest:${userId}`));
 
-    const scrobbles = await services.db.select().from(schema.scrobbles).where(eq(schema.scrobbles.userId, userId));
-    expect(scrobbles).toHaveLength(8);
-    expect(scrobbles.every((s) => s.artistKey === s.artistName.toLowerCase())).toBe(true);
-
-    const summary = await syncSummary(services, userId);
-    expect(summary.phase).toBe('complete');
-    expect(summary.scrobbleCount).toBe(8);
-    expect(summary.percent).toBe(100);
-    expect(summary.statsBuiltAt).not.toBeNull();
-
-    const artists = await services.db
-      .select()
-      .from(schema.userArtistStats)
-      .where(eq(schema.userArtistStats.userId, userId))
-      .orderBy(schema.userArtistStats.rank);
-    expect(artists.map((a) => [a.artistName, a.playCount, a.rank, a.difficulty])).toEqual([
-      ['Radiohead', 4, 1, 'deep_cut'],
-      ['Boards of Canada', 3, 2, 'deep_cut'],
-      ['Autechre', 1, 3, 'deep_cut'],
+describe('announcing a library', () => {
+  it('queues one ingestion job per artist, most played first, with keys derived on the server', async () => {
+    const res = await announce([
+      { name: 'Radiohead', rank: 1, mbidHint: 'a74b1b7f-71a5-4011-9441-d0b5e4122711' },
+      { name: '  Boards   of Canada ', rank: 2, mbidHint: null },
     ]);
+    expect(res.status).toBe(200);
+    await expect(res.json() as Promise<TriviaSummary>).resolves.toEqual({ eligibleArtists: 2, resolvedArtists: 0, readyArtists: 0, ready: false, running: true });
 
-    const [airbag] = await services.db
-      .select()
-      .from(schema.userTrackStats)
-      .where(and(eq(schema.userTrackStats.userId, userId), eq(schema.userTrackStats.trackKey, 'airbag')));
-    expect(airbag).toMatchObject({ playCount: 3, rankOverall: 1, rankInArtist: 1 });
-
-    const years = await services.db.select().from(schema.userYearArtistStats).where(eq(schema.userYearArtistStats.userId, userId));
-    expect(new Set(years.map((y) => y.year))).toEqual(new Set([2020, 2021]));
-    expect(years.find((y) => y.year === 2021)).toMatchObject({ artistKey: 'autechre', rankInYear: 1 });
-  });
-
-  it('incremental sync fetches only what is newer and re-ranks', async () => {
-    clock += 60 * 60 * 1000;
-    fake.state.history.unshift(
-      track(T0 + 31_536_000 + 200, 'Autechre', 'Bike', 'Incunabula'),
-      track(T0 + 31_536_000 + 300, 'Autechre', 'Bike', 'Incunabula'),
-      track(T0 + 31_536_000 + 400, 'Autechre', 'Bike', 'Incunabula'),
-      track(T0 + 31_536_000 + 500, 'Autechre', 'Bike', 'Incunabula'),
-    );
-    const before = fake.state.calls.length;
-    await enqueueJob(services, { kind: 'incremental', userId, dedupeKey: `incremental:${userId}` });
     const runner = new JobRunner(services, handlers, { workerId: 'test', retryBaseMs: 1 });
-    await runner.drain();
-    const calls = fake.state.calls.slice(before).filter((u) => u.searchParams.get('method') === 'user.getRecentTracks');
-    expect(calls.length).toBeGreaterThan(0);
-    expect(calls[0]!.searchParams.get('from')).toBe(String(T0 + 31_536_000 + 100));
-
-    const summary = await syncSummary(services, userId);
-    expect(summary.scrobbleCount).toBe(12);
-    const [top] = await services.db.select().from(schema.userArtistStats).where(and(eq(schema.userArtistStats.userId, userId), eq(schema.userArtistStats.rank, 1)));
-    expect(top?.artistName).toBe('Autechre');
+    await runner.runOnce(); // the fan-out job; the artist jobs stay queued
+    const jobs = await artistJobs();
+    expect(jobs.map((j) => [j.dedupeKey, j.priority, j.status])).toEqual([
+      ['mb_artist:radiohead', 999, 'queued'],
+      ['mb_artist:boards of canada', 998, 'queued'],
+    ]);
+    expect(jobs[0]!.payload).toMatchObject({ task: 'artist', artistKey: 'radiohead', displayName: 'Radiohead', lastfmMbidHint: 'a74b1b7f-71a5-4011-9441-d0b5e4122711', rank: 1 });
   });
 
-  it('retries a failing job with back-off and resumes the backfill from its checkpoint', async () => {
-    const [user] = await services.db.insert(schema.users).values({ lastfmUsername: 'flaky', lastfmUsernameKey: 'flaky' }).returning();
-    await ensureUserRows(services, user!.id);
-    fake.state.username = 'flaky';
-    fake.state.recentTracksError = 16;
-    const jobId = await enqueueJob(services, { kind: 'backfill', userId: user!.id, dedupeKey: `backfill:${user!.id}` });
-    const runner = new JobRunner(services, handlers, { workerId: 'test', retryBaseMs: 1_000 });
+  it('ignores a repeat within ten minutes, and never queues the same artist twice', async () => {
+    await announce([{ name: 'Radiohead', rank: 1, mbidHint: null }, { name: 'Autechre', rank: 2, mbidHint: null }]);
+    expect(await fanOutJobs()).toHaveLength(1);
+
+    clock += 11 * 60 * 1000;
+    await announce([{ name: 'RADIOHEAD', rank: 1, mbidHint: null }, { name: 'Autechre', rank: 2, mbidHint: null }]);
+    expect(await fanOutJobs()).toHaveLength(2);
+    // Run only the new fan-out: artist jobs have higher priority, so park them in the future first.
+    await services.db.update(schema.syncJobs).set({ runAfter: new Date(clock + 3_600_000) }).where(like(schema.syncJobs.dedupeKey, 'mb_artist:%'));
+    await new JobRunner(services, handlers, { workerId: 'test', retryBaseMs: 1 }).runOnce();
+    expect((await artistJobs()).map((j) => j.dedupeKey)).toEqual(['mb_artist:radiohead', 'mb_artist:boards of canada', 'mb_artist:autechre']);
+  });
+
+  it('caps the artists per announcement and validates the body', async () => {
+    const tooMany = Array.from({ length: TRIVIA_ARTIST_CAP + 1 }, (_, i) => ({ name: `Artist ${i}`, rank: i + 1, mbidHint: null }));
+    expect((await announce(tooMany)).status).toBe(400);
+    expect((await announce([{ name: 'X', rank: 1, mbidHint: 'not-an-mbid' }])).status).toBe(400);
+    expect((await announce([{ name: '', rank: 1, mbidHint: null }])).status).toBe(400);
+  });
+
+  it('answers readiness for whichever artists the device names', async () => {
+    const res = await app.request('/v1/me/trivia', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ artistKeys: ['never heard of them'] }),
+    });
+    // The user's own fan-out job has finished; nothing is pending for this artist.
+    await services.db.delete(schema.syncJobs).where(eq(schema.syncJobs.userId, userId));
+    const again = await app.request('/v1/me/trivia', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ artistKeys: ['never heard of them'] }),
+    });
+    expect(res.status).toBe(200);
+    await expect(again.json()).resolves.toEqual({ eligibleArtists: 1, resolvedArtists: 0, readyArtists: 0, ready: false, running: false });
+  });
+});
+
+describe('job runner', () => {
+  it('retries a failing job with back-off, then succeeds', async () => {
+    let failing = true;
+    const runner = new JobRunner(
+      services,
+      {
+        mb_ingest: async () => {
+          if (failing) throw new Error('upstream said 503');
+        },
+      },
+      { workerId: 'test', retryBaseMs: 1_000 },
+    );
+    const jobId = await enqueueJob(services, { kind: 'mb_ingest', dedupeKey: 'retry-test', priority: 5_000 });
+    expect(await enqueueJob(services, { kind: 'mb_ingest', dedupeKey: 'retry-test' })).toBeNull(); // deduplicated while pending
     expect(await runner.runOnce()).toBe(jobId);
 
     let [job] = await services.db.select().from(schema.syncJobs).where(eq(schema.syncJobs.id, jobId!));
     expect(job).toMatchObject({ status: 'queued', attempts: 1 });
-    expect(job!.lastError).toContain('16');
+    expect(job!.lastError).toContain('503');
     expect(job!.runAfter.getTime()).toBeGreaterThan(clock);
     expect(await runner.runOnce()).toBeNull(); // not yet due
 
     clock = job!.runAfter.getTime() + 1;
-    fake.state.recentTracksError = null;
+    failing = false;
     expect(await runner.runOnce()).toBe(jobId);
     [job] = await services.db.select().from(schema.syncJobs).where(eq(schema.syncJobs.id, jobId!));
     expect(job).toMatchObject({ status: 'succeeded', attempts: 2 });
-    expect((await syncSummary(services, user!.id)).phase).toBe('complete');
   });
 
-  it('marks privacy-blocked users instead of failing the job', async () => {
-    const [user] = await services.db.insert(schema.users).values({ lastfmUsername: 'private', lastfmUsernameKey: 'private' }).returning();
-    await ensureUserRows(services, user!.id);
-    fake.state.username = 'private';
-    fake.state.recentTracksError = 17;
-    await enqueueJob(services, { kind: 'backfill', userId: user!.id, dedupeKey: `backfill:${user!.id}` });
-    const runner = new JobRunner(services, handlers, { workerId: 'test' });
-    await runner.drain();
-    const summary = await syncSummary(services, user!.id);
-    expect(summary.phase).toBe('privacy_blocked');
-    fake.state.recentTracksError = null;
+  it('fails a job of a kind nobody handles any more, without taking the runner down', async () => {
+    const jobId = await enqueueJob(services, { kind: 'backfill', dedupeKey: 'legacy-backfill', priority: 6_000 });
+    const runner = new JobRunner(services, handlers, { workerId: 'test', retryBaseMs: 1 });
+    expect(await runner.runOnce()).toBe(jobId);
+    const [job] = await services.db.select().from(schema.syncJobs).where(eq(schema.syncJobs.id, jobId!));
+    expect(job!.lastError).toContain('no handler registered');
   });
 });

@@ -28,73 +28,52 @@ describe('schema migrations', () => {
     expect(declared.length).toBeGreaterThan(20);
     for (const name of declared) expect(created, `table ${name} missing after migrations`).toContain(name);
   });
+
+  it('enable row level security on every table, so the Supabase Data API roles get nothing', async () => {
+    const result = await handle.pglite.execute<{ relname: string }>(
+      sql`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`,
+    );
+    expect(result.rows.map((row) => row.relname), 'tables declared without .enableRLS()').toEqual([]);
+  });
 });
 
 describe('core invariants', () => {
-  it('scrobble backfill is idempotent: re-inserting the same plays adds no rows', async () => {
-    const [user] = await handle.db
-      .insert(schema.users)
-      .values({ lastfmUsername: 'Someone', lastfmUsernameKey: 'someone' })
-      .returning();
-    const rows = [
-      {
-        userId: user!.id,
-        playedAt: new Date('2023-11-14T22:13:20Z'),
-        artistName: 'Boards of Canada',
-        artistKey: 'boards of canada',
-        trackName: 'Roygbiv',
-        trackKey: 'roygbiv',
-        albumName: 'Music Has the Right to Children',
-        albumKey: 'music has the right to children',
-      },
-      {
-        userId: user!.id,
-        playedAt: new Date('2023-11-14T22:17:50Z'),
-        artistName: 'Boards of Canada',
-        artistKey: 'boards of canada',
-        trackName: 'Aquarius',
-        trackKey: 'aquarius',
-        albumName: null,
-        albumKey: null,
-      },
-    ];
-    await handle.db.insert(schema.scrobbles).values(rows).onConflictDoNothing();
-    await handle.db.insert(schema.scrobbles).values(rows).onConflictDoNothing();
-    const [count] = await handle.db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(schema.scrobbles)
-      .where(eq(schema.scrobbles.userId, user!.id));
-    expect(count?.n).toBe(2);
+  it('keeps no listening history: the library lives on the player\'s device', async () => {
+    const result = await handle.pglite.execute<{ table_name: string }>(
+      sql`select table_name from information_schema.tables where table_schema = 'public' and (table_name = 'scrobbles' or table_name like 'user\\_%\\_stats' or table_name = 'user_sync_state')`,
+    );
+    expect(result.rows).toEqual([]);
   });
 
-  it('deleting a user cascades to scrobbles and rollups', async () => {
+  it('deleting a user cascades to settings, rounds and questions', async () => {
     const [user] = await handle.db
       .insert(schema.users)
       .values({ lastfmUsername: 'Gone', lastfmUsernameKey: 'gone' })
       .returning();
-    await handle.db.insert(schema.scrobbles).values({
+    await handle.db.insert(schema.userSettings).values({ userId: user!.id });
+    const [round] = await handle.db
+      .insert(schema.rounds)
+      .values({ userId: user!.id, mode: 'side_a', difficulty: 'easy', requestedLength: 5, seed: 1, generatorVersion: 'test', timerSeconds: 20 })
+      .returning();
+    await handle.db.insert(schema.roundQuestions).values({
+      roundId: round!.id,
       userId: user!.id,
-      playedAt: new Date('2020-01-01T00:00:00Z'),
-      artistName: 'X',
-      artistKey: 'x',
-      trackName: 'Y',
-      trackKey: 'y',
-    });
-    await handle.db.insert(schema.userArtistStats).values({
-      userId: user!.id,
-      artistKey: 'x',
-      artistName: 'X',
-      playCount: 1,
-      rank: 1,
-      difficulty: 'deep_cut',
-      firstPlayedAt: new Date('2020-01-01T00:00:00Z'),
-      lastPlayedAt: new Date('2020-01-01T00:00:00Z'),
+      position: 0,
+      category: 'stats_artist_rank',
+      difficulty: 'easy',
+      answerFormat: 'numeric',
+      templateId: 'stats_artist_rank.v1',
+      prompt: 'Where does X sit?',
+      correctAnswer: { value: 1 },
+      correctDisplay: '#1',
+      fingerprint: 'f',
+      timeLimitSeconds: 20,
     });
     await handle.db.delete(schema.users).where(eq(schema.users.id, user!.id));
-    const [scrobbles] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(schema.scrobbles).where(eq(schema.scrobbles.userId, user!.id));
-    const [stats] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(schema.userArtistStats).where(eq(schema.userArtistStats.userId, user!.id));
-    expect(scrobbles?.n).toBe(0);
-    expect(stats?.n).toBe(0);
+    const [settings] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(schema.userSettings).where(eq(schema.userSettings.userId, user!.id));
+    const [rounds] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(schema.rounds).where(eq(schema.rounds.userId, user!.id));
+    const [questions] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(schema.roundQuestions).where(eq(schema.roundQuestions.userId, user!.id));
+    expect([settings?.n, rounds?.n, questions?.n]).toEqual([0, 0, 0]);
   });
 
   it('rejects a bracket whose size is not a power of two', async () => {

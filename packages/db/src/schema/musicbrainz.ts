@@ -38,7 +38,7 @@ export const mbCacheEntries = pgTable(
     expiresAt: tstz().notNull(),
   },
   (t) => [primaryKey({ columns: [t.entityType, t.mbid, t.inc] }), index('mb_cache_entries_expires_idx').on(t.expiresAt)],
-);
+).enableRLS();
 
 /** MBIDs that answered 301: cache keys converge on the canonical id. */
 export const mbMbidRedirects = pgTable(
@@ -50,7 +50,7 @@ export const mbMbidRedirects = pgTable(
     observedAt: createdAt(),
   },
   (t) => [index('mb_mbid_redirects_canonical_idx').on(t.canonicalMbid)],
-);
+).enableRLS();
 
 export const mbArtists = pgTable(
   'mb_artists',
@@ -87,7 +87,7 @@ export const mbArtists = pgTable(
     index('mb_artists_name_key_idx').on(t.nameKey),
     index('mb_artists_wikidata_idx').on(t.wikidataQid).where(sql`${t.wikidataQid} is not null`),
   ],
-);
+).enableRLS();
 
 /**
  * Artist-artist relationships in canonical orientation (entity0 = person /
@@ -127,7 +127,7 @@ export const mbArtistRelations = pgTable(
     index('mb_artist_relations_entity1_idx').on(t.entity1Mbid, t.typeId),
     index('mb_artist_relations_entity0_idx').on(t.entity0Mbid, t.typeId),
   ],
-);
+).enableRLS();
 
 /** The album concept: release years and discography order come from here. */
 export const mbReleaseGroups = pgTable(
@@ -163,7 +163,7 @@ export const mbReleaseGroups = pgTable(
       .where(sql`${t.isStudioAlbum} = true`),
     index('mb_release_groups_artist_title_idx').on(t.primaryArtistMbid, t.titleKey),
   ],
-);
+).enableRLS();
 
 /** Concrete editions. Exactly one per group is `isCanonical` and carries the tracklist. */
 export const mbReleases = pgTable(
@@ -198,7 +198,7 @@ export const mbReleases = pgTable(
     uniqueIndex('mb_releases_one_canonical_uq').on(t.releaseGroupMbid).where(sql`${t.isCanonical} = true`),
     index('mb_releases_group_status_idx').on(t.releaseGroupMbid, t.status, t.date),
   ],
-);
+).enableRLS();
 
 export const mbRecordings = pgTable(
   'mb_recordings',
@@ -220,7 +220,7 @@ export const mbRecordings = pgTable(
     relsFetchedAt: tstz(),
   },
   (t) => [index('mb_recordings_artist_title_idx').on(t.primaryArtistMbid, t.titleKey)],
-);
+).enableRLS();
 
 /** Tracklist of a canonical release: openers, closers and "which album contains" come from here. */
 export const mbTracks = pgTable(
@@ -255,7 +255,7 @@ export const mbTracks = pgTable(
     index('mb_tracks_recording_idx').on(t.recordingMbid),
     index('mb_tracks_release_title_idx').on(t.releaseMbid, t.titleKey),
   ],
-);
+).enableRLS();
 
 export const mbLabels = pgTable('mb_labels', {
   mbid: uuid().primaryKey(),
@@ -267,7 +267,7 @@ export const mbLabels = pgTable('mb_labels', {
   disambiguation: text().notNull().default(''),
   wikidataQid: text(),
   fetchedAt: createdAt(),
-});
+}).enableRLS();
 
 export const mbReleaseLabels = pgTable(
   'mb_release_labels',
@@ -281,7 +281,7 @@ export const mbReleaseLabels = pgTable(
     catalogNumber: text().notNull().default(''),
   },
   (t) => [primaryKey({ columns: [t.releaseMbid, t.labelMbid, t.catalogNumber] }), index('mb_release_labels_label_idx').on(t.labelMbid)],
-);
+).enableRLS();
 
 /** Recording-level artist credits (producer, engineer, mix...) for the optional toggles. */
 export const mbRecordingCredits = pgTable(
@@ -302,7 +302,7 @@ export const mbRecordingCredits = pgTable(
     uniqueIndex('mb_recording_credits_uq').on(t.recordingMbid, t.artistMbid, t.typeId),
     index('mb_recording_credits_artist_idx').on(t.artistMbid, t.typeId),
   ],
-);
+).enableRLS();
 
 /** Search results cached by normalised query so a name is searched once, with a TTL because the index lags. */
 export const mbSearchCache = pgTable(
@@ -320,4 +320,4 @@ export const mbSearchCache = pgTable(
     expiresAt: tstz().notNull(),
   },
   (t) => [primaryKey({ columns: [t.entityType, t.queryKey] }), index('mb_search_cache_expires_idx').on(t.expiresAt)],
-);
+).enableRLS();

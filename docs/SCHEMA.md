@@ -4,13 +4,13 @@ Postgres (Supabase-compatible), defined with Drizzle in `packages/db/src/schema`
 
 Design rules:
 
-- **One row per scrobble.** Names are stored inline with normalised `*_key` columns (`lower(trim(name))`), so backfill is one `INSERT ... ON CONFLICT DO NOTHING` per page and every stat is a `GROUP BY` per user. Last.fm MBIDs are kept as `*_mbid_hint` and never used for joins.
-- **Rollups, not triggers.** `user_artist_stats`, `user_track_stats`, `user_album_stats` and `user_year_artist_stats` are rebuilt by the API after each sync. `user_sync_state.stats_built_through` says how fresh they are; rounds record the snapshot they were generated from.
+- **No listening history.** Scrobbles and per-user stats live on the player's device (see `docs/DECISIONS.md`, 2026-10-03). The API receives a stats snapshot with each round or bracket request and stores only what it produced from it: questions, answers, bracket entrants. `rounds.stats_snapshot_at` and `brackets.stats_snapshot_at` record how fresh that snapshot was. Artists are identified by a normalised key (`lower(trim(name))`, whitespace collapsed); Last.fm MBIDs are hints and never used for joins.
 - **MusicBrainz is cached by MBID.** `mb_cache_entries` keeps raw payloads (including `not_found` negative entries) so normalised rows can be re-derived without another request. Merged MBIDs land in `mb_mbid_redirects`. Relationships are matched by `type_id` UUID.
 - **One canonical release per release group** carries the tracklist (`mb_tracks`), which is where openers, closers and "which album contains" come from. Release years and discography order come from `mb_release_groups.first_release_date`.
 - **Wikidata is a gap filler.** `wd_entity_links` maps MBIDs to Q-items (free via MusicBrainz url-rels when available); `wd_artist_facts` holds the extracted geography/label facts for the optional toggles.
 - **Everything user-owned cascades** from `users`. Cache tables are shared across users and never deleted with a user.
 - **Secrets never sit in plaintext.** Last.fm session keys are stored encrypted (`lastfm_sessions.session_key_ciphertext`); app sessions and auth tokens are stored as hashes.
+- **Row level security is on for every table, with no policies.** The API connects as the table owner and is unaffected; Supabase's Data API roles (`anon`, `authenticated`) get no rows. A new table needs `.enableRLS()`; the schema test fails without it.
 
 ## Tables
 
@@ -21,13 +21,7 @@ Design rules:
 | Identity | `auth_flows` | One row per Connect attempt; makes token exchange single-use and idempotent |
 | Identity | `app_sessions` | The app's own bearer sessions (hash only) |
 | Identity | `user_settings` | Defaults and the optional geography / producer / label toggles |
-| Sync | `user_sync_state` | Backfill cursor, incremental watermark, rollup freshness, privacy block |
-| Sync | `sync_jobs` | Durable job queue with dedupe key, priority, lease, retries |
-| History | `scrobbles` | One row per play, unique on (user, played_at, artist_key, track_key) |
-| Rollups | `user_artist_stats` | Plays, rank, first/last play and difficulty tier per artist |
-| Rollups | `user_track_stats` | Per-track plays with overall and within-artist rank |
-| Rollups | `user_album_stats` | Per-album plays with overall and within-artist rank |
-| Rollups | `user_year_artist_stats` | Year chart toppers in the user's timezone |
+| Jobs | `sync_jobs` | Durable job queue for MusicBrainz ingestion with dedupe key, priority, lease, retries |
 | Resolution | `artist_resolutions` | Global Last.fm artist name to MBID mapping with confidence and manual overrides |
 | MusicBrainz | `mb_cache_entries` | Raw WS/2 payloads by (entity, mbid, inc), including negative cache |
 | MusicBrainz | `mb_mbid_redirects` | Merged MBIDs to canonical MBIDs |
@@ -740,4 +734,50 @@ ALTER TABLE "auth_flows" ADD COLUMN "exchanged_at" timestamp with time zone;--> 
 ALTER TABLE "auth_flows" ADD COLUMN "app_session_id" uuid;--> statement-breakpoint
 ALTER TABLE "auth_flows" ADD CONSTRAINT "auth_flows_app_session_id_app_sessions_id_fk" FOREIGN KEY ("app_session_id") REFERENCES "public"."app_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_flows_exchange_code_uq" ON "auth_flows" USING btree ("exchange_code_hash") WHERE "auth_flows"."exchange_code_hash" is not null;
+
+-- 0002_motionless_warbound.sql
+ALTER TABLE "app_sessions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "auth_flows" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "lastfm_sessions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user_settings" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "sync_jobs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user_sync_state" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "scrobbles" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user_album_stats" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user_artist_stats" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user_track_stats" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user_year_artist_stats" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "artist_resolutions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_artist_relations" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_artists" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_cache_entries" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_labels" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_mbid_redirects" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_recording_credits" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_recordings" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_release_groups" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_release_labels" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_releases" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_search_cache" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mb_tracks" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "wd_artist_facts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "wd_entities" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "wd_entity_links" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "answers" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "llm_calls" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "round_questions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "rounds" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "bracket_entrants" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "bracket_matches" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "brackets" ENABLE ROW LEVEL SECURITY;
+
+-- 0003_lame_ogun.sql
+DROP TABLE "user_sync_state" CASCADE;--> statement-breakpoint
+DROP TABLE "scrobbles" CASCADE;--> statement-breakpoint
+DROP TABLE "user_album_stats" CASCADE;--> statement-breakpoint
+DROP TABLE "user_artist_stats" CASCADE;--> statement-breakpoint
+DROP TABLE "user_track_stats" CASCADE;--> statement-breakpoint
+DROP TABLE "user_year_artist_stats" CASCADE;--> statement-breakpoint
+DROP TYPE "public"."sync_phase";
 ```

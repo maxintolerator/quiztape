@@ -1,20 +1,20 @@
 import { schema } from '@quiztape/db';
 import type { RecentTrack } from '@quiztape/lastfm';
 import { ARTIST_RELATION_TYPE_ID } from '@quiztape/musicbrainz';
-import type { AnswerResultDto, RoundStateDto, SyncSummary } from '@quiztape/shared';
+import { type AnswerResultDto, type RoundStateDto, type TriviaSummary, triviaArtistsOf } from '@quiztape/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app';
-import { createFakeLastfm, track } from '../fake-lastfm';
+import { track } from '../fake-lastfm';
 import { createFakeMusicBrainz, idFor } from '../fake-musicbrainz';
 import { handlers } from '../jobs/handlers';
 import { enqueueJob } from '../jobs/queue';
 import { JobRunner } from '../jobs/runner';
 import { sha256Hex } from '../lib/crypto';
-import { ensureUserRows, syncSummary } from '../lib/users';
+import { ensureUserRows } from '../lib/users';
 import type { Services } from '../services';
-import { createTestServices } from '../testing';
+import { createTestServices, snapshotOf } from '../testing';
 
 const GROUPS = ['Radiohead', 'Boards of Canada', 'Autechre', 'Portishead', 'Massive Attack', 'Burial', 'Four Tet', 'Caribou', 'Bonobo'];
 
@@ -62,19 +62,21 @@ let services: Services;
 let app: ReturnType<typeof createApp>;
 let token: string;
 let userId: string;
+const stats = snapshotOf(buildHistory());
+let announced: TriviaSummary;
 
 beforeAll(async () => {
-  const lastfm = createFakeLastfm({ history: buildHistory(), perPage: 200 });
-  const fetch = (url: string, init?: RequestInit) => (url.includes('musicbrainz.org') ? mb.fetch(url) : lastfm.fetch(url, init));
-  services = await createTestServices({ fetch });
+  services = await createTestServices({ fetch: (url: string) => mb.fetch(url) });
   app = createApp(services);
   const [user] = await services.db.insert(schema.users).values({ lastfmUsername: 'someone', lastfmUsernameKey: 'someone' }).returning();
   userId = user!.id;
   await ensureUserRows(services, userId);
   token = 'test-token-' + 'y'.repeat(30);
   await services.db.insert(schema.appSessions).values({ userId, tokenHash: sha256Hex(token), platform: 'web', expiresAt: new Date(Date.now() + 86_400_000) });
-  await enqueueJob(services, { kind: 'backfill', userId, dedupeKey: `backfill:${userId}` });
-  await new JobRunner(services, handlers, { workerId: 'test' }).drain(); // backfill -> stats_rebuild -> mb_ingest
+  // The device announces its top artists; the fan-out job queues one ingestion per artist.
+  const res = await app.request('/v1/me/library', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ artists: triviaArtistsOf(stats) }) });
+  announced = (await res.json()) as TriviaSummary;
+  await new JobRunner(services, handlers, { workerId: 'test' }).drain();
 }, 240_000);
 
 afterAll(async () => {
@@ -85,12 +87,10 @@ const authed = (init: RequestInit = {}) => ({ ...init, headers: { ...(init.heade
 
 describe('MusicBrainz ingestion', () => {
   it('resolves eligible artists, caches discographies and reports trivia readiness', async () => {
-    const summary: SyncSummary = await syncSummary(services, userId);
-    expect(summary.trivia.eligibleArtists).toBe(9);
-    expect(summary.trivia.resolvedArtists).toBe(9);
-    expect(summary.trivia.readyArtists).toBe(9);
-    expect(summary.trivia.ready).toBe(true);
-    expect(summary.trivia.running).toBe(false);
+    expect(announced).toEqual({ eligibleArtists: 9, resolvedArtists: 0, readyArtists: 0, ready: false, running: true });
+    const res = await app.request('/v1/me/trivia', authed({ method: 'POST', body: JSON.stringify({ artistKeys: stats.artists.map((a) => a.key) }) }));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ eligibleArtists: 9, resolvedArtists: 9, readyArtists: 9, ready: true, running: false });
   });
 
   it('keeps only sole-credit studio albums with an official release and picks the plain CD as canonical', async () => {
@@ -125,7 +125,7 @@ describe('MusicBrainz ingestion', () => {
 
   it('never re-fetches what is cached: a second ingestion makes no MusicBrainz requests', async () => {
     const before = mb.calls.length;
-    await enqueueJob(services, { kind: 'mb_ingest', userId, dedupeKey: `mb_ingest:${userId}` });
+    await enqueueJob(services, { kind: 'mb_ingest', userId, dedupeKey: `mb_ingest:${userId}`, payload: { artists: triviaArtistsOf(stats) } });
     await new JobRunner(services, handlers, { workerId: 'test' }).drain();
     expect(mb.calls.length).toBe(before);
   });
@@ -133,7 +133,7 @@ describe('MusicBrainz ingestion', () => {
 
 describe('Side B and Mixtape rounds', () => {
   it('cuts a Side B round from the cache and grades order and duration answers', async () => {
-    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_b', difficulty: 'easy', length: 10 }) }));
+    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_b', difficulty: 'easy', length: 10, stats }) }));
     expect(created.status).toBe(201);
     const state = (await created.json()) as RoundStateDto;
     expect(state.round.questionCount).toBeGreaterThanOrEqual(6);
@@ -162,7 +162,7 @@ describe('Side B and Mixtape rounds', () => {
   });
 
   it('mixes both sides in a mixtape', async () => {
-    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'mixtape', difficulty: 'medium', length: 10 }) }));
+    const created = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'mixtape', difficulty: 'medium', length: 10, stats }) }));
     expect(created.status).toBe(201);
     const { round } = (await created.json()) as RoundStateDto;
     const rows = await services.db.select({ category: schema.roundQuestions.category }).from(schema.roundQuestions).where(eq(schema.roundQuestions.roundId, round.id));
@@ -171,7 +171,7 @@ describe('Side B and Mixtape rounds', () => {
   });
 
   it('still refuses bracket', async () => {
-    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'bracket', difficulty: 'easy', length: 5 }) }));
+    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'bracket', difficulty: 'easy', length: 5, stats }) }));
     expect(res.status).toBe(400);
   });
 });

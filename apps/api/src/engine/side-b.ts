@@ -1,7 +1,7 @@
 import { schema } from '@quiztape/db';
 import { ARTIST_RELATION_TYPE_ID } from '@quiztape/musicbrainz';
-import { type Difficulty, DIFFICULTIES, MIN_PLAYS_FOR_QUESTIONS, SIDE_B_CATEGORIES, type SideBCategory, UNIT_DURATION, UNIT_YEAR } from '@quiztape/shared';
-import { and, eq, gte, inArray, isNotNull, ne } from 'drizzle-orm';
+import { type Difficulty, DIFFICULTIES, SIDE_B_CATEGORIES, type SideBCategory, UNIT_DURATION, UNIT_YEAR } from '@quiztape/shared';
+import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 
 import { stripEditionSuffix } from './normalize';
 import { buildQuestion, optionIdFor } from './side-a';
@@ -55,24 +55,25 @@ export async function generateSideBQuestions(ctx: GeneratorContext, options: { d
 }
 
 async function loadTriviaArtists(ctx: GeneratorContext): Promise<TriviaArtist[]> {
-  const rows = await ctx.db
+  const artists = ctx.stats.artists;
+  if (artists.length === 0) return [];
+  // Any of the player's artists with cached facts counts, including ones another player's library brought in.
+  const facts = await ctx.db
     .select({
-      artistKey: schema.userArtistStats.artistKey,
-      artistName: schema.userArtistStats.artistName,
-      rank: schema.userArtistStats.rank,
-      playCount: schema.userArtistStats.playCount,
-      difficulty: schema.userArtistStats.difficulty,
+      artistKey: schema.artistResolutions.artistKey,
       mbid: schema.mbArtists.mbid,
       mbName: schema.mbArtists.name,
       type: schema.mbArtists.type,
       country: schema.mbArtists.country,
     })
-    .from(schema.userArtistStats)
-    .innerJoin(schema.artistResolutions, and(eq(schema.artistResolutions.artistKey, schema.userArtistStats.artistKey), eq(schema.artistResolutions.status, 'resolved')))
+    .from(schema.artistResolutions)
     .innerJoin(schema.mbArtists, and(eq(schema.mbArtists.mbid, schema.artistResolutions.mbid), isNotNull(schema.mbArtists.tracklistsFetchedAt), eq(schema.mbArtists.isSpecialPurpose, false)))
-    .where(and(eq(schema.userArtistStats.userId, ctx.userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)))
-    .orderBy(schema.userArtistStats.rank);
-  return rows;
+    .where(and(inArray(schema.artistResolutions.artistKey, artists.map((a) => a.artistKey)), eq(schema.artistResolutions.status, 'resolved')));
+  const byKey = new Map(facts.map((f) => [f.artistKey, f]));
+  return artists.flatMap((a) => {
+    const fact = byKey.get(a.artistKey);
+    return fact ? [{ artistKey: a.artistKey, artistName: a.artistName, rank: a.rank, playCount: a.playCount, difficulty: a.difficulty, mbid: fact.mbid, mbName: fact.mbName, type: fact.type, country: fact.country }] : [];
+  });
 }
 
 function pickAnchor(ctx: GeneratorContext, artists: TriviaArtist[], difficulty: Difficulty): TriviaArtist | null {
@@ -112,12 +113,8 @@ async function albumsWithTracklists(ctx: GeneratorContext, artistMbid: string): 
 }
 
 /** Track keys the user has actually played for this artist, to prefer familiar songs. */
-async function playedTrackKeys(ctx: GeneratorContext, artistKey: string): Promise<Set<string>> {
-  const rows = await ctx.db
-    .select({ trackKey: schema.userTrackStats.trackKey })
-    .from(schema.userTrackStats)
-    .where(and(eq(schema.userTrackStats.userId, ctx.userId), eq(schema.userTrackStats.artistKey, artistKey)));
-  return new Set(rows.map((r) => r.trackKey));
+function playedTrackKeys(ctx: GeneratorContext, artistKey: string): ReadonlySet<string> {
+  return ctx.stats.artists.find((a) => a.artistKey === artistKey)?.playedTrackKeys ?? new Set();
 }
 
 async function memberships(ctx: GeneratorContext, groupMbid: string): Promise<Relation[]> {
@@ -207,7 +204,7 @@ const GENERATORS: Record<SideBCategory, Generator> = {
   titles_album_contains_track: async (ctx, anchor) => {
     const withTracks = await albumsWithTracklists(ctx, anchor.mbid);
     if (withTracks.length < 3) return null;
-    const played = await playedTrackKeys(ctx, anchor.artistKey);
+    const played = playedTrackKeys(ctx, anchor.artistKey);
     // A title that appears on more than one canonical tracklist is ambiguous.
     const titleCounts = new Map<string, number>();
     for (const { tracks } of withTracks) for (const t of tracks) titleCounts.set(t.titleKey, (titleCounts.get(t.titleKey) ?? 0) + 1);
@@ -327,7 +324,7 @@ const GENERATORS: Record<SideBCategory, Generator> = {
 
   duration_track_runtime: async (ctx, anchor) => {
     const withTracks = await albumsWithTracklists(ctx, anchor.mbid);
-    const played = await playedTrackKeys(ctx, anchor.artistKey);
+    const played = playedTrackKeys(ctx, anchor.artistKey);
     const pool = withTracks.flatMap(({ album, tracks }) => tracks.filter((t) => t.lengthMs !== null && t.lengthMs > 30_000).map((track) => ({ album, track })));
     if (pool.length === 0) return null;
     const familiar = pool.filter((p) => played.has(p.track.titleKey));

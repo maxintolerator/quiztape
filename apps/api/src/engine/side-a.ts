@@ -1,25 +1,20 @@
-import { schema } from '@quiztape/db';
-import { type Difficulty, DIFFICULTIES, MIN_PLAYS_FOR_QUESTIONS, type QuestionOption, SIDE_A_CATEGORIES, type SideACategory } from '@quiztape/shared';
-import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { type Difficulty, DIFFICULTIES, MIN_PLAYS_FOR_QUESTIONS, SIDE_A_CATEGORIES, type SideACategory } from '@quiztape/shared';
 import { createHash } from 'node:crypto';
 
 import { stripEditionSuffix } from './normalize';
+import type { EngineArtist } from './stats';
 import type { GeneratedQuestion, GeneratorContext } from './types';
 
-type ArtistStat = typeof schema.userArtistStats.$inferSelect;
+type ArtistStat = EngineArtist;
 
 /**
- * Side A: pure functions over the user's rollups. Each generator returns null
+ * Side A: pure functions over the library snapshot the player's device sent. Each generator returns null
  * when the data cannot support an unambiguous question, and the round builder
  * moves on to another anchor or category.
  */
 export async function generateSideAQuestions(ctx: GeneratorContext, options: { difficulty: Difficulty; count: number }): Promise<GeneratedQuestion[]> {
   // Only artists with real listening behind them; ranks stay global so "#12" still means #12 overall.
-  const artists = await ctx.db
-    .select()
-    .from(schema.userArtistStats)
-    .where(and(eq(schema.userArtistStats.userId, ctx.userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)))
-    .orderBy(schema.userArtistStats.rank);
+  const artists = ctx.stats.artists;
   if (artists.length === 0) return [];
 
   const questions: GeneratedQuestion[] = [];
@@ -74,19 +69,13 @@ const GENERATORS: Record<SideACategory, Generator> = {
       numericAnswer: rank,
       numericTolerance: tolerance,
       anchorArtistKey: anchor.artistKey,
-      factRefs: [{ table: 'user_artist_stats', artistKey: anchor.artistKey }],
+      factRefs: [{ source: 'library', artistKey: anchor.artistKey }],
     });
   },
 
-  stats_top_track_for_artist: async (ctx, anchor) => {
+  stats_top_track_for_artist: async (_ctx, anchor) => {
     if (anchor.distinctTracks < 3) return null;
-    const top = await ctx.db
-      .select()
-      .from(schema.userTrackStats)
-      .where(and(eq(schema.userTrackStats.userId, ctx.userId), eq(schema.userTrackStats.artistKey, anchor.artistKey)))
-      .orderBy(schema.userTrackStats.rankInArtist)
-      .limit(2);
-    const [first, second] = top;
+    const [first, second] = anchor.topTracks;
     if (!first || !second || first.playCount <= second.playCount) return null;
     return build({
       category: 'stats_top_track_for_artist',
@@ -95,23 +84,17 @@ const GENERATORS: Record<SideACategory, Generator> = {
       answerFormat: 'free_text',
       prompt: `What is your most played ${anchor.artistName} track?`,
       hint: `${first.playCount.toLocaleString()} plays, ahead of the runner-up by ${(first.playCount - second.playCount).toLocaleString()}.`,
-      correctAnswer: { text: first.trackName },
-      correctDisplay: `${first.trackName} (${first.playCount.toLocaleString()} plays)`,
-      acceptedAnswers: accepted(first.trackName),
+      correctAnswer: { text: first.name },
+      correctDisplay: `${first.name} (${first.playCount.toLocaleString()} plays)`,
+      acceptedAnswers: accepted(first.name),
       anchorArtistKey: anchor.artistKey,
-      factRefs: [{ table: 'user_track_stats', artistKey: anchor.artistKey, trackKey: first.trackKey }],
+      factRefs: [{ source: 'library', artistKey: anchor.artistKey, trackKey: first.key }],
     });
   },
 
-  stats_top_album: async (ctx, anchor) => {
+  stats_top_album: async (_ctx, anchor) => {
     if (anchor.distinctAlbums < 2) return null;
-    const top = await ctx.db
-      .select()
-      .from(schema.userAlbumStats)
-      .where(and(eq(schema.userAlbumStats.userId, ctx.userId), eq(schema.userAlbumStats.artistKey, anchor.artistKey)))
-      .orderBy(schema.userAlbumStats.rankInArtist)
-      .limit(2);
-    const [first, second] = top;
+    const [first, second] = anchor.topAlbums;
     if (!first || !second || first.playCount <= second.playCount) return null;
     return build({
       category: 'stats_top_album',
@@ -120,11 +103,11 @@ const GENERATORS: Record<SideACategory, Generator> = {
       answerFormat: 'free_text',
       prompt: `Which ${anchor.artistName} album have you played the most?`,
       hint: `You have played tracks from ${anchor.distinctAlbums} of their albums.`,
-      correctAnswer: { text: first.albumName },
-      correctDisplay: `${first.albumName} (${first.playCount.toLocaleString()} plays)`,
-      acceptedAnswers: accepted(first.albumName),
+      correctAnswer: { text: first.name },
+      correctDisplay: `${first.name} (${first.playCount.toLocaleString()} plays)`,
+      acceptedAnswers: accepted(first.name),
       anchorArtistKey: anchor.artistKey,
-      factRefs: [{ table: 'user_album_stats', artistKey: anchor.artistKey, albumKey: first.albumKey }],
+      factRefs: [{ source: 'library', artistKey: anchor.artistKey, albumKey: first.key }],
     });
   },
 
@@ -153,49 +136,29 @@ const GENERATORS: Record<SideACategory, Generator> = {
         .map((a) => `${a.artistName}: ${formatMonth(a.firstPlayedAt)}`)
         .join(' · '),
       anchorArtistKey: anchor.artistKey,
-      factRefs: candidates.map((a) => ({ table: 'user_artist_stats', artistKey: a.artistKey, firstPlayedAt: a.firstPlayedAt.toISOString() })),
+      factRefs: candidates.map((a) => ({ source: 'library', artistKey: a.artistKey, firstPlayedAt: a.firstPlayedAt.toISOString() })),
     });
   },
 
   stats_year_chart_topper: async (ctx, anchor) => {
     // Pick a year where this anchor is involved, else any year with a clear winner.
-    const years = await ctx.db
-      .select({ year: schema.userYearArtistStats.year, artistKey: schema.userYearArtistStats.artistKey, playCount: schema.userYearArtistStats.playCount, rankInYear: schema.userYearArtistStats.rankInYear })
-      .from(schema.userYearArtistStats)
-      .where(and(eq(schema.userYearArtistStats.userId, ctx.userId), inArray(schema.userYearArtistStats.rankInYear, [1, 2])))
-      .orderBy(desc(schema.userYearArtistStats.year));
-    const byYear = new Map<number, { first?: (typeof years)[number]; second?: (typeof years)[number] }>();
-    for (const row of years) {
-      const entry = byYear.get(row.year) ?? {};
-      if (row.rankInYear === 1) entry.first = row;
-      else entry.second = row;
-      byYear.set(row.year, entry);
-    }
-    const clear = [...byYear.entries()].filter(
-      ([, e]) => e.first && e.first.playCount >= MIN_PLAYS_FOR_QUESTIONS && (!e.second || e.first.playCount >= e.second.playCount * 1.2),
-    );
+    const clear = ctx.stats.years.filter((e) => e.first.playCount >= MIN_PLAYS_FOR_QUESTIONS && (!e.second || e.first.playCount >= e.second.playCount * 1.2));
     if (clear.length === 0) return null;
-    const preferred = clear.filter(([, e]) => e.first!.artistKey === anchor.artistKey);
-    const [year, entry] = ctx.rng.pick(preferred.length > 0 ? preferred : clear);
-    const [winner] = await ctx.db
-      .select({ artistName: schema.userArtistStats.artistName })
-      .from(schema.userArtistStats)
-      .where(and(eq(schema.userArtistStats.userId, ctx.userId), eq(schema.userArtistStats.artistKey, entry.first!.artistKey)))
-      .limit(1);
-    if (!winner) return null;
+    const preferred = clear.filter((e) => e.first.key === anchor.artistKey);
+    const { year, first: winner } = ctx.rng.pick(preferred.length > 0 ? preferred : clear);
     return build({
       category: 'stats_year_chart_topper',
       templateId: 'stats_year_chart_topper.v1',
       difficulty: anchor.difficulty,
       answerFormat: 'free_text',
       prompt: `Who was your most played artist in ${year}?`,
-      hint: `${entry.first!.playCount.toLocaleString()} plays that year.`,
-      correctAnswer: { text: winner.artistName },
-      correctDisplay: `${winner.artistName} (${entry.first!.playCount.toLocaleString()} plays in ${year})`,
-      acceptedAnswers: accepted(winner.artistName),
-      anchorArtistKey: entry.first!.artistKey,
+      hint: `${winner.playCount.toLocaleString()} plays that year.`,
+      correctAnswer: { text: winner.name },
+      correctDisplay: `${winner.name} (${winner.playCount.toLocaleString()} plays in ${year})`,
+      acceptedAnswers: accepted(winner.name),
+      anchorArtistKey: winner.key,
       anchorYear: year,
-      factRefs: [{ table: 'user_year_artist_stats', year, artistKey: entry.first!.artistKey }],
+      factRefs: [{ source: 'library', year, artistKey: winner.key }],
     });
   },
 
@@ -225,7 +188,7 @@ const GENERATORS: Record<SideACategory, Generator> = {
       correctDisplay: `${winner.artistName}`,
       explanation: `${anchor.artistName}: ${anchor.playCount.toLocaleString()} plays · ${rival.artistName}: ${rival.playCount.toLocaleString()} plays`,
       anchorArtistKey: anchor.artistKey,
-      factRefs: [anchor, rival].map((a) => ({ table: 'user_artist_stats', artistKey: a.artistKey, playCount: a.playCount })),
+      factRefs: [anchor, rival].map((a) => ({ source: 'library', artistKey: a.artistKey, playCount: a.playCount })),
     });
   },
 };
@@ -291,13 +254,4 @@ function optionId(ctx: GeneratorContext, seed: string): string {
 
 function formatMonth(date: Date): string {
   return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
-
-/** Artists with enough plays to be asked about, used for the "library too thin" check. */
-export async function countEligibleArtists(db: GeneratorContext['db'], userId: string): Promise<number> {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(schema.userArtistStats)
-    .where(and(eq(schema.userArtistStats.userId, userId), gte(schema.userArtistStats.playCount, MIN_PLAYS_FOR_QUESTIONS)));
-  return row?.n ?? 0;
 }

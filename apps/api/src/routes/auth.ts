@@ -6,7 +6,6 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../app';
-import { enqueueJob } from '../jobs/queue';
 import { randomToken, seal, sha256Hex } from '../lib/crypto';
 import { ensureUserRows, nameKey, publicUser } from '../lib/users';
 import { requireAuth } from '../middleware/require-auth';
@@ -20,7 +19,7 @@ const PLATFORMS: ClientPlatform[] = ['web', 'ios', 'android'];
  * Last.fm web auth, all platforms:
  *   1. GET /lastfm/start      -> 302 to Last.fm with cb = our callback + state
  *   2. GET /lastfm/callback   -> exchange the 60-minute token for a session key,
- *                               upsert the user, queue the backfill, 302 to the
+ *                               upsert the user, 302 to the
  *                               client's return URL with a one-time ?code=
  *   3. POST /exchange {code}  -> bearer token for the client to store
  */
@@ -125,7 +124,6 @@ auth.get('/lastfm/callback', async (c) => {
   });
 
   await ensureUserRows(services, user.id);
-  await enqueueJob(services, { kind: 'backfill', userId: user.id, dedupeKey: `backfill:${user.id}`, priority: 5 });
 
   const code = randomToken(24);
   await db

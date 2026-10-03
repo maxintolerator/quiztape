@@ -1,24 +1,21 @@
-import type { SyncSummary } from '@quiztape/shared';
+import type { ImportProgress } from '@quiztape/shared';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { fonts, palette, radius, spacing } from '@/theme/tokens';
 
-/** Tape spooling from left to right as pages come in, with a big percentage. */
-export function SyncProgress({ sync, compact = false }: { sync: SyncSummary; compact?: boolean }) {
-  const percent = sync.percent ?? 0;
-  const indeterminate = sync.phase === 'pending' || (sync.phase === 'backfilling' && sync.pagesTotal === null);
+/** Tape spooling from left to right as pages come in, with a big percentage. `progress` is null until Last.fm answers. */
+export function SyncProgress({ progress }: { progress: ImportProgress | null }) {
+  const total = progress?.pagesTotal ?? null;
+  const indeterminate = !progress || total === null;
+  const percent = indeterminate ? 0 : total === 0 ? 100 : Math.min(99, Math.round((progress.pagesDone / total) * 100));
   return (
     <View style={styles.wrap} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: percent }}>
-      {!compact ? <Text style={styles.percent}>{indeterminate ? '…' : `${percent}%`}</Text> : null}
+      <Text style={styles.percent}>{indeterminate ? '…' : `${percent}%`}</Text>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${indeterminate ? 4 : Math.max(2, percent)}%` }]} />
       </View>
       <Text style={styles.detail}>
-        {sync.phase === 'pending'
-          ? 'Contacting Last.fm…'
-          : sync.phase === 'backfilling'
-            ? `Page ${sync.pagesDone ?? 0}${sync.pagesTotal ? ` of ${sync.pagesTotal}` : ''} · ${sync.scrobbleCount.toLocaleString()} scrobbles so far`
-            : `${sync.scrobbleCount.toLocaleString()} scrobbles on tape`}
+        {indeterminate ? 'Contacting Last.fm…' : `Page ${progress.pagesDone} of ${total} · ${progress.scrobbles.toLocaleString()} scrobbles so far`}
       </Text>
     </View>
   );

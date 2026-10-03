@@ -18,8 +18,9 @@ import { and, desc, eq, gt } from 'drizzle-orm';
 import type { Services } from '../services';
 import { awardPoints, grade } from './grading';
 import { createRng, randomSeed } from './rng';
-import { countEligibleArtists, generateSideAQuestions } from './side-a';
+import { generateSideAQuestions } from './side-a';
 import { generateSideBQuestions } from './side-b';
+import { engineStats } from './stats';
 import type { GeneratedQuestion, GeneratorContext } from './types';
 import { triviaSummary } from '../lib/users';
 
@@ -44,11 +45,8 @@ export async function createRound(services: Services, userId: string, request: C
   const { db, now } = services;
   if (request.mode === 'bracket') throw new RoundError(400, 'mode_not_available', 'Bracket arrives in build step 6.');
 
-  const [sync] = await db.select().from(schema.userSyncState).where(eq(schema.userSyncState.userId, userId)).limit(1);
-  if (!sync || sync.phase !== 'complete' || !sync.statsBuiltAt) {
-    throw new RoundError(409, 'library_not_ready', 'Your listening history is still syncing. Rounds unlock when it is on tape.');
-  }
-  const eligible = await countEligibleArtists(db, userId);
+  const stats = engineStats(request.stats);
+  const eligible = stats.artists.length;
   if (eligible < MIN_ARTISTS_FOR_ROUND) {
     throw new RoundError(
       409,
@@ -66,20 +64,20 @@ export async function createRound(services: Services, userId: string, request: C
     .where(and(eq(schema.roundQuestions.userId, userId), gt(schema.roundQuestions.createdAt, since)));
 
   if (request.mode !== 'side_a') {
-    const trivia = await triviaSummary(services, userId);
+    const trivia = await triviaSummary(services, userId, stats.artists.map((a) => a.artistKey));
     if (!trivia.ready) {
       throw new RoundError(
         409,
         'trivia_not_ready',
         trivia.running
-          ? `Still loading band facts: ${trivia.readyArtists} of ${trivia.eligibleArtists} artists ready. Side A is playable meanwhile.`
+          ? `Still loading band facts: ${trivia.readyArtists} artists ready so far. Side A is playable meanwhile.`
           : `Band facts are not loaded yet for enough artists (${trivia.readyArtists} ready). Refresh to start loading.`,
       );
     }
   }
 
   const seed = randomSeed();
-  const ctx: GeneratorContext = { db, userId, rng: createRng(seed), recentFingerprints: new Set(recent.map((r) => r.fingerprint)), usedArtistKeys: new Set() };
+  const ctx: GeneratorContext = { db, userId, stats, rng: createRng(seed), recentFingerprints: new Set(recent.map((r) => r.fingerprint)), usedArtistKeys: new Set() };
   const generated = await generateForMode(ctx, request);
   if (generated.length < Math.min(3, request.length)) {
     throw new RoundError(409, 'library_too_thin', 'Not enough distinct data to build a round yet. Keep scrobbling and try again.');
@@ -99,7 +97,7 @@ export async function createRound(services: Services, userId: string, request: C
         seed,
         generatorVersion: GENERATOR_VERSION,
         optionalCategories: [],
-        statsSnapshotAt: sync.statsBuiltThrough,
+        statsSnapshotAt: stats.builtThrough,
         timerSeconds,
         maxScore: generated.length * POINTS_PER_QUESTION,
         createdAt: current,

@@ -2,6 +2,7 @@ import type { Db } from '@quiztape/db';
 import type { AnswerFormat, Difficulty, QuestionCategory, QuestionOption } from '@quiztape/shared';
 
 import type { Rng } from './rng';
+import type { EngineStats } from './stats';
 
 /** A question the engine produced, before it is stored. Carries the answer; never leaves the server. */
 export interface GeneratedQuestion {
@@ -31,6 +32,8 @@ export interface GeneratedQuestion {
 export interface GeneratorContext {
   db: Db;
   userId: string;
+  /** The player's library, as sent by their device with this request. */
+  stats: EngineStats;
   rng: Rng;
   /** Fingerprints asked recently; generators must not repeat them. */
   recentFingerprints: ReadonlySet<string>;

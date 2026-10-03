@@ -4,12 +4,14 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../app';
 import { RoundError, abandonRound, createRound, getResults, getRoundState, submitAnswer } from '../engine/round-service';
+import { StatsSnapshotSchema } from '../engine/stats';
 import { requireAuth } from '../middleware/require-auth';
 
 const CreateBody = z.object({
   mode: z.enum(QUIZ_MODES),
   difficulty: z.enum(DIFFICULTIES),
   length: z.union([z.literal(ROUND_LENGTHS[0]), z.literal(ROUND_LENGTHS[1]), z.literal(ROUND_LENGTHS[2])]),
+  stats: StatsSnapshotSchema,
 });
 
 const AnswerBody = z.object({

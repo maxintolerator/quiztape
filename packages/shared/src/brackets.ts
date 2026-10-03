@@ -1,3 +1,5 @@
+import type { StatsSnapshot } from './library';
+
 export const BRACKET_SIZES = [8, 16, 32] as const;
 export type BracketSize = (typeof BRACKET_SIZES)[number];
 export type BracketStatus = 'active' | 'completed' | 'abandoned';
@@ -54,6 +56,7 @@ export interface DuelResultDto {
 
 export interface CreateBracketRequest {
   size: BracketSize;
+  stats: StatsSnapshot;
 }
 
 /** Human names for rounds counted back from the final. */

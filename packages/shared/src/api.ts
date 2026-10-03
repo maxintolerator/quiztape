@@ -9,11 +9,9 @@ export interface PublicUser {
   realName: string | null;
 }
 
-export type SyncPhase = 'pending' | 'backfilling' | 'complete' | 'privacy_blocked' | 'error';
-
 /** Side B readiness: how much of the user's library has MusicBrainz facts behind it. */
 export interface TriviaSummary {
-  /** Artists with enough plays to be asked about. */
+  /** Artists the summary was asked about: the player's most played, capped at TRIVIA_ARTIST_CAP. */
   eligibleArtists: number;
   /** Of those, mapped to a MusicBrainz artist. */
   resolvedArtists: number;
@@ -23,25 +21,6 @@ export interface TriviaSummary {
   ready: boolean;
   /** An ingestion job is queued or running right now. */
   running: boolean;
-}
-
-export interface SyncSummary {
-  phase: SyncPhase;
-  trivia: TriviaSummary;
-  scrobbleCount: number;
-  /** 0..100 while backfilling; 100 once complete; null when unknown. */
-  percent: number | null;
-  pagesDone: number | null;
-  pagesTotal: number | null;
-  oldestPlayedAt: string | null;
-  newestPlayedAt: string | null;
-  statsBuiltAt: string | null;
-  lastError: string | null;
-}
-
-/** The library is playable once the backfill finished and the rollups exist. */
-export function isLibraryReady(sync: SyncSummary | null | undefined): boolean {
-  return !!sync && sync.phase === 'complete' && sync.statsBuiltAt !== null;
 }
 
 export interface UserSettingsDto {
@@ -58,7 +37,8 @@ export interface UserSettingsDto {
 
 export interface MeResponse {
   user: PublicUser;
-  sync: SyncSummary;
+  /** The app's Last.fm API key (an identifier, not the secret): the client reads the player's history with it. */
+  lastfm: { apiKey: string };
 }
 
 export interface ExchangeResponse {

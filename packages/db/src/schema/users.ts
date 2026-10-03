@@ -28,7 +28,7 @@ export const users = pgTable(
     deletedAt: tstz(),
   },
   (t) => [uniqueIndex('users_lastfm_username_key_uq').on(t.lastfmUsernameKey)],
-);
+).enableRLS();
 
 /** Last.fm session keys never expire on their own; stored encrypted, one active per user. */
 export const lastfmSessions = pgTable(
@@ -50,7 +50,7 @@ export const lastfmSessions = pgTable(
     revokedReason: text(),
   },
   (t) => [uniqueIndex('lastfm_sessions_one_active_per_user').on(t.userId).where(sql`${t.status} = 'active'`)],
-);
+).enableRLS();
 
 /**
  * One row per Connect attempt. The API creates it before redirecting to Last.fm
@@ -84,7 +84,7 @@ export const authFlows = pgTable(
     uniqueIndex('auth_flows_exchange_code_uq').on(t.exchangeCodeHash).where(sql`${t.exchangeCodeHash} is not null`),
     index('auth_flows_expires_idx').on(t.expiresAt).where(sql`${t.consumedAt} is null`),
   ],
-);
+).enableRLS();
 
 /** The app's own bearer session handed to the client; only its hash is stored. */
 export const appSessions = pgTable(
@@ -102,7 +102,7 @@ export const appSessions = pgTable(
     revokedAt: tstz(),
   },
   (t) => [uniqueIndex('app_sessions_token_hash_uq').on(t.tokenHash), index('app_sessions_user_idx').on(t.userId, t.expiresAt)],
-);
+).enableRLS();
 
 /** Per-user preferences, including the optional question toggles (all default off). */
 export const userSettings = pgTable('user_settings', {
@@ -120,4 +120,4 @@ export const userSettings = pgTable('user_settings', {
   timezone: text().notNull().default('UTC'),
   llmRephraseEnabled: boolean().notNull().default(true),
   updatedAt: updatedAt(),
-});
+}).enableRLS();

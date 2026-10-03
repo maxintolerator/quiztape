@@ -27,7 +27,7 @@ Prerequisites: Node 22.13+, a Postgres URL (a free Supabase project works), a La
    npm run web      # http://localhost:8081
    ```
 
-5. Open http://localhost:8081, press **Connect Last.fm**, approve, and watch the first sync spool in. When it reads "library synced", pick Side A, a difficulty and a length, and press play.
+5. Open http://localhost:8081, press **Connect Last.fm**, approve, and watch the first sync spool in (your browser downloads the history from Last.fm and keeps it). When it finishes, pick Side A, a difficulty and a length, and press play.
 
 Native: `npm run ios` / `npm run android` need Xcode or Android Studio and a development build (Expo Go cannot receive the sign-in redirect). `npm run check:platforms` proves the iOS and Android bundles compile without either.
 

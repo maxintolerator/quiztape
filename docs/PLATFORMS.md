@@ -32,3 +32,6 @@ The development Mac is Apple Silicon with an Intel-only Homebrew under `/usr/loc
 | Reel timer animation | `Animated` loop; static when `prefers-reduced-motion` | Same, via `AccessibilityInfo.isReduceMotionEnabled` | Written |
 | VHS scanlines | CSS overlay in `global.css` | Not rendered (cosmetic only) | Accepted |
 | Share card | Web Share API where available, download fallback | `expo-sharing` | Step 5 |
+| Listening library storage | IndexedDB (database `quiztape`, store `library`) in `src/lib/kv.web.ts`; falls back to memory for the tab when storage is blocked or full, and the home screen says so | SQLite through `expo-sqlite/kv-store` in `src/lib/kv.ts` (no size ceiling, unlike AsyncStorage on Android) | Written. Both expose the same four-function key-value contract; everything above it (`@quiztape/shared` `LibraryStore`, import, refresh) is shared and tested. Native path compiles but has not run on a device or simulator from this machine |
+| Reading the history from Last.fm | `fetch` to `ws.audioscrobbler.com` from the page (Last.fm sends `Access-Control-Allow-Origin: *`) | Same `fetch`, no CORS involved | Written, shared code |
+| History file (download / load) | Blob download and a file picker in `src/lib/history-file.web.ts` | Not offered yet: the buttons are hidden. Needs `expo-sharing` and `expo-document-picker` | Web written; native open |

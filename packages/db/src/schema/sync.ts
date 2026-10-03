@@ -2,42 +2,10 @@ import { sql } from 'drizzle-orm';
 import { bigint, index, integer, jsonb, pgTable, smallint, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { createdAt, emptyJsonObject, tstz, updatedAt } from './_common';
-import { jobStatus, syncJobKind, syncPhase } from './enums';
+import { jobStatus, syncJobKind } from './enums';
 import { users } from './users';
 
-/**
- * Where a user's history stands. The backfill pins `backfillPinnedTo` to the
- * sync start so page numbers stay stable while new scrobbles arrive, then
- * incremental syncs fetch everything after `newestPlayedAt`.
- */
-export const userSyncState = pgTable(
-  'user_sync_state',
-  {
-    userId: uuid()
-      .primaryKey()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    phase: syncPhase().notNull().default('pending'),
-    backfillPinnedTo: tstz(),
-    backfillNextPage: integer(),
-    backfillTotalPages: integer(),
-    backfillStartedAt: tstz(),
-    backfillCompletedAt: tstz(),
-    lastIncrementalAt: tstz(),
-    oldestPlayedAt: tstz(),
-    newestPlayedAt: tstz(),
-    scrobbleCount: bigint({ mode: 'number' }).notNull().default(0),
-    /** Rollups (user_*_stats) reflect scrobbles up to this instant; null = never built. */
-    statsBuiltThrough: tstz(),
-    statsBuiltAt: tstz(),
-    lastErrorCode: smallint(),
-    lastError: text(),
-    lastErrorAt: tstz(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [index('user_sync_state_phase_idx').on(t.phase, t.lastIncrementalAt)],
-);
-
-/** Durable job queue for backfills, incremental syncs, rollup rebuilds and MusicBrainz/Wikidata ingestion. */
+/** Durable job queue for MusicBrainz/Wikidata ingestion. */
 export const syncJobs = pgTable(
   'sync_jobs',
   {
@@ -72,4 +40,4 @@ export const syncJobs = pgTable(
     index('sync_jobs_lease_idx').on(t.leaseExpiresAt).where(sql`${t.status} = 'running'`),
     index('sync_jobs_user_idx').on(t.userId, t.kind, t.createdAt),
   ],
-);
+).enableRLS();

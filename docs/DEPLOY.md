@@ -8,7 +8,7 @@ Three pieces, three hosts. The API is a long-running Node process (it carries th
 | API + job runner (Docker) | Fly.io, region `iad` (or Railway / Render, anything that runs a container 24/7) | `https://api.quiztape.com` |
 | Postgres | Supabase (existing project) | pooler on 6543 for the API, direct 5432 for migrations |
 
-Serverless is deliberately not used for the API: the backfill runs for minutes per user and needs a process that stays up.
+Serverless is deliberately not used for the API: MusicBrainz ingestion runs as a queue at one request per second and needs a process that stays up.
 
 ## 0. Before you start
 
@@ -129,7 +129,7 @@ In https://www.last.fm/api/accounts set the callback URL to `https://api.quiztap
 
 1. `curl https://api.quiztape.com/health` returns `{"ok":true,...}`.
 2. Open `https://quiztape.com`, press Connect, approve on Last.fm, land on the sync screen, watch the percentage climb, land on the config screen, play a Side A round.
-3. `fly logs` shows the backfill pages and no errors.
+3. `fly logs` shows `POST /v1/me/library` followed by MusicBrainz ingestion, and no errors. The history download itself happens in the browser and never appears in the API logs.
 4. `https://quiztape.com/privacy` and `/terms` render with your details filled in.
 
 ## 6. Later: native builds

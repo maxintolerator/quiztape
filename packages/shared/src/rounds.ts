@@ -1,3 +1,4 @@
+import type { StatsSnapshot } from './library';
 import type { Difficulty, GradingMethod, QuestionCategory, QuizMode, RoundLength } from './quiz';
 
 export type AnswerFormat = 'multiple_choice' | 'free_text' | 'numeric' | 'order';
@@ -90,6 +91,8 @@ export interface CreateRoundRequest {
   mode: QuizMode;
   difficulty: Difficulty;
   length: RoundLength;
+  /** The player's library, boiled down on their device. The server stores none of it beyond the questions it cuts. */
+  stats: StatsSnapshot;
 }
 
 /** Base points per question; a speed bonus of up to half again is added for quick correct answers. */

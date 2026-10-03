@@ -18,6 +18,8 @@ export interface Services {
   config: {
     apiBaseUrl: string;
     lastfmCallbackUrl: string;
+    /** Handed to signed-in clients so the device can read the player's history itself. An identifier, not the secret. */
+    lastfmApiKey: string;
     corsOrigins: string[];
     /** Return targets the auth flow may redirect to: web origins and the native scheme. */
     allowedReturnOrigins: string[];
@@ -50,6 +52,7 @@ export function createServices(env: Env = loadEnv()): Services {
     config: {
       apiBaseUrl,
       lastfmCallbackUrl: env.LASTFM_CALLBACK_URL,
+      lastfmApiKey: env.LASTFM_API_KEY,
       corsOrigins: env.CORS_ORIGINS,
       allowedReturnOrigins: env.CORS_ORIGINS,
       nativeScheme: 'quiztape',

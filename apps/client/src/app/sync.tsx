@@ -1,64 +1,49 @@
-import { isLibraryReady } from '@quiztape/shared';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SyncProgress } from '@/components/sync-progress';
 import { TapeButton } from '@/components/tape-button';
+import { fileTransferSupported, useLibrary } from '@/store/library';
 import { useSession } from '@/store/session';
 import { fonts, layout, palette, radius, spacing } from '@/theme/tokens';
 
 const LASTFM_PRIVACY_URL = 'https://www.last.fm/settings/privacy';
 
 /**
- * First-sync screen. Polls the sync state every 2.5 s, shows the tape
- * spooling with a percentage, and handles every way it can go wrong:
- * privacy-blocked account, sync errors, an unreachable API, an empty library.
- * The root layout moves the user to /home the moment the library is ready.
+ * First-sync screen. The history is downloaded from Last.fm by this device
+ * and kept on it; the tape spools with a percentage while it does. Handles
+ * every way that can go wrong: privacy-blocked account, Last.fm errors, an
+ * unreachable API, an empty library. The root layout moves the user to /home
+ * the moment the library is playable.
  */
 export default function SyncScreen() {
   const user = useSession((s) => s.user);
-  const sync = useSession((s) => s.sync);
-  const refreshSync = useSession((s) => s.refreshSync);
-  const requestSync = useSession((s) => s.requestSync);
+  const apiKey = useSession((s) => s.lastfmApiKey);
+  const hydrate = useSession((s) => s.hydrate);
   const signOut = useSession((s) => s.signOut);
+  const phase = useLibrary((s) => s.phase);
+  const progress = useLibrary((s) => s.progress);
+  const snapshot = useLibrary((s) => s.snapshot);
+  const lastError = useLibrary((s) => s.lastError);
+  const retryImport = useLibrary((s) => s.retry);
+  const refresh = useLibrary((s) => s.refresh);
+  const loadFile = useLibrary((s) => s.loadFile);
   const router = useRouter();
-  const [unreachable, setUnreachable] = useState(false);
-  const [retrying, setRetrying] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const poll = async () => {
-      const next = await refreshSync();
-      if (cancelled) return;
-      setUnreachable(next === null);
-      if (next && isLibraryReady(next)) return; // the auth gate navigates away
-      const active = !next || next.phase === 'pending' || next.phase === 'backfilling' || (next.phase === 'complete' && !next.statsBuiltAt);
-      timer = setTimeout(poll, active ? 2_500 : 15_000);
-    };
-    void poll();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [refreshSync]);
-
-  const retry = async () => {
-    setRetrying(true);
+  const during = (task: () => Promise<unknown>) => async () => {
+    setBusy(true);
     try {
-      await requestSync();
-      await refreshSync();
-    } catch {
-      setUnreachable(true);
+      await task();
     } finally {
-      setRetrying(false);
+      setBusy(false);
     }
   };
 
-  const phase = sync?.phase ?? 'pending';
-  const emptyLibrary = sync?.phase === 'complete' && sync.scrobbleCount === 0;
+  const emptyLibrary = phase === 'ready' && snapshot?.scrobbleCount === 0;
+  const playable = phase === 'ready' && !emptyLibrary;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -66,39 +51,46 @@ export default function SyncScreen() {
         <Text style={styles.kicker}>FIRST SYNC</Text>
         <Text style={styles.title}>{user?.lastfmUsername ?? '…'}</Text>
 
-        {unreachable && !sync ? (
-          <ErrorBlock title="Can't reach the Quiztape API" body="Check that the API is running and reachable, then try again." action="TRY AGAIN" busy={retrying} onPress={retry} />
+        {!apiKey ? (
+          <ErrorBlock title="Can't reach the Quiztape API" body="Check that the API is running and reachable, then try again." action="TRY AGAIN" busy={busy} onPress={during(hydrate)} />
         ) : phase === 'privacy_blocked' ? (
           <ErrorBlock
             title="Last.fm is hiding your listening"
             body={'Your Last.fm privacy settings have "Hide recent listening information" turned on, so no history can be read. Turn it off, then retry.'}
             action="RETRY SYNC"
-            busy={retrying}
-            onPress={retry}
+            busy={busy}
+            onPress={during(retryImport)}
             link={{ label: 'Open Last.fm privacy settings', url: LASTFM_PRIVACY_URL }}
           />
         ) : phase === 'error' ? (
-          <ErrorBlock title="Sync hit a snag" body={sync?.lastError ?? 'Unknown error. It will retry automatically.'} action="RETRY NOW" busy={retrying} onPress={retry} />
+          <ErrorBlock title="Sync hit a snag" body={`${lastError ?? 'Unknown error.'} What was downloaded so far is kept; retrying carries on from there.`} action="RETRY NOW" busy={busy} onPress={during(retryImport)} />
         ) : emptyLibrary ? (
           <ErrorBlock
             title="No scrobbles found"
-            body="This Last.fm account has no listening history yet. Scrobble some music and come back; the tape will fill up on its own."
+            body="This Last.fm account has no listening history yet. Scrobble some music and come back."
             action="CHECK AGAIN"
-            busy={retrying}
-            onPress={retry}
+            busy={busy}
+            onPress={during(() => refresh(true))}
           />
         ) : (
           <>
-            {sync ? <SyncProgress sync={sync} /> : <Text style={styles.muted}>Threading the tape…</Text>}
+            {phase === 'syncing' ? <SyncProgress progress={progress} /> : <Text style={styles.muted}>Threading the tape…</Text>}
             <Text style={styles.body}>
-              Quiztape is rewinding your whole Last.fm history so questions can be cut from it. Big libraries take a few minutes; you can leave this open or come back later, it keeps going.
+              {Platform.OS === 'web'
+                ? 'Quiztape is rewinding your whole Last.fm history into this browser, where it stays. Big libraries take a few minutes. Keep this tab open; if you leave, it carries on from where it stopped next time.'
+                : 'Quiztape is rewinding your whole Last.fm history onto this device, where it stays. Big libraries take a few minutes. Keep the app open; if you leave, it carries on from where it stopped next time.'}
             </Text>
-            {unreachable ? <Text style={styles.warn}>Lost contact with the API, retrying…</Text> : null}
+            {fileTransferSupported && phase === 'syncing' ? (
+              <Pressable accessibilityRole="button" onPress={() => void loadFile()} style={styles.eject}>
+                <Text style={[styles.link, styles.centered]}>Have a Quiztape history file? Load it instead</Text>
+              </Pressable>
+            ) : null}
+            {lastError && phase === 'syncing' ? <Text style={styles.warn}>{lastError}</Text> : null}
           </>
         )}
 
         <View style={styles.footer}>
-          {sync && isLibraryReady(sync) ? <TapeButton label="CONTINUE" onPress={() => router.replace('/home')} /> : null}
+          {playable ? <TapeButton label="CONTINUE" onPress={() => router.replace('/home')} /> : null}
           <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.eject}>
             <Text style={styles.ejectLabel}>EJECT</Text>
           </Pressable>
@@ -134,6 +126,7 @@ const styles = StyleSheet.create({
   errorBox: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: palette.wrong, backgroundColor: palette.baseElevated, alignItems: 'center' },
   errorTitle: { color: palette.cream, fontFamily: fonts.display, fontSize: 22, letterSpacing: 1, textAlign: 'center' },
   link: { color: palette.cyan, textDecorationLine: 'underline', fontFamily: fonts.mono, fontSize: 13 },
+  centered: { textAlign: 'center' },
   footer: { gap: spacing.md, alignItems: 'center' },
   eject: { padding: spacing.sm },
   ejectLabel: { color: palette.chrome, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 2 },

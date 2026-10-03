@@ -21,7 +21,7 @@ export const wdEntityLinks = pgTable(
     primaryKey({ columns: [t.entityType, t.mbid] }),
     index('wd_entity_links_retry_idx').on(t.nextRetryAt).where(sql`${t.resolution} = 'pending'`),
   ],
-);
+).enableRLS();
 
 /** Raw item claims, so facts can be re-derived without another request. */
 export const wdEntities = pgTable(
@@ -37,7 +37,7 @@ export const wdEntities = pgTable(
     expiresAt: tstz().notNull(),
   },
   (t) => [index('wd_entities_expires_idx').on(t.expiresAt)],
-);
+).enableRLS();
 
 /** Facts extracted for the optional geography / label toggles. */
 export const wdArtistFacts = pgTable('wd_artist_facts', {
@@ -59,4 +59,4 @@ export const wdArtistFacts = pgTable('wd_artist_facts', {
   genres: jsonb().$type<unknown[]>().notNull().default(emptyJsonArray),
   recordLabels: jsonb().$type<unknown[]>().notNull().default(emptyJsonArray),
   extractedAt: createdAt(),
-});
+}).enableRLS();

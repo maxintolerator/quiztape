@@ -4,14 +4,11 @@ import { type BracketStateDto, type DuelResultDto, roundName, seedingOrder } fro
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app';
-import { createFakeLastfm, track } from '../fake-lastfm';
-import { handlers } from '../jobs/handlers';
-import { enqueueJob } from '../jobs/queue';
-import { JobRunner } from '../jobs/runner';
+import { track } from '../fake-lastfm';
 import { sha256Hex } from '../lib/crypto';
 import { ensureUserRows } from '../lib/users';
 import type { Services } from '../services';
-import { createTestServices } from '../testing';
+import { createTestServices, snapshotOf } from '../testing';
 
 const ARTISTS = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10'];
 
@@ -30,17 +27,15 @@ function buildHistory() {
 let services: Services;
 let app: ReturnType<typeof createApp>;
 let token: string;
+const stats = snapshotOf(buildHistory());
 
 beforeAll(async () => {
-  const lastfm = createFakeLastfm({ history: buildHistory(), perPage: 200 });
-  services = await createTestServices({ fetch: lastfm.fetch });
+  services = await createTestServices();
   app = createApp(services);
   const [user] = await services.db.insert(schema.users).values({ lastfmUsername: 'someone', lastfmUsernameKey: 'someone' }).returning();
   await ensureUserRows(services, user!.id);
   token = 'test-token-' + 'z'.repeat(30);
   await services.db.insert(schema.appSessions).values({ userId: user!.id, tokenHash: sha256Hex(token), platform: 'web', expiresAt: new Date(Date.now() + 86_400_000) });
-  await enqueueJob(services, { kind: 'backfill', userId: user!.id, dedupeKey: `backfill:${user!.id}` });
-  await new JobRunner(services, handlers, { workerId: 'test' }).drain();
 }, 180_000);
 
 afterAll(async () => {
@@ -61,7 +56,7 @@ describe('seeding helpers', () => {
 
 describe('bracket', () => {
   it('falls back to the largest size the library supports and plays through duels and picks', async () => {
-    const created = await app.request('/v1/brackets', authed({ method: 'POST', body: JSON.stringify({ size: 16 }) }));
+    const created = await app.request('/v1/brackets', authed({ method: 'POST', body: JSON.stringify({ size: 16, stats }) }));
     expect(created.status).toBe(201);
     let state = (await created.json()) as BracketStateDto;
     expect(state.bracket.size).toBe(8); // only 10 artists have 50+ plays

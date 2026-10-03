@@ -1,4 +1,16 @@
-import { BRACKET_SIZES, type BracketSize, type BracketStateDto, type Difficulty, DIFFICULTIES, isLibraryReady, type QuizMode, ROUND_LENGTHS, type RoundLength, type RoundStateDto } from '@quiztape/shared';
+import {
+  BRACKET_SIZES,
+  type BracketSize,
+  type BracketStateDto,
+  type Difficulty,
+  DIFFICULTIES,
+  type QuizMode,
+  ROUND_LENGTHS,
+  type RoundLength,
+  type RoundStateDto,
+  type TriviaSummary,
+  triviaArtistsOf,
+} from '@quiztape/shared';
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -7,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SupportLink } from '@/components/support-link';
 import { TapeButton } from '@/components/tape-button';
 import { api, ApiError } from '@/lib/api';
+import { fileTransferSupported, useLibrary } from '@/store/library';
 import { useSession } from '@/store/session';
 import { fonts, layout, palette, radius, spacing } from '@/theme/tokens';
 
@@ -22,12 +35,18 @@ const DIFFICULTY_LABEL: Record<Difficulty, string> = { easy: 'Easy', medium: 'Me
 export default function HomeScreen() {
   const user = useSession((s) => s.user);
   const token = useSession((s) => s.token);
-  const sync = useSession((s) => s.sync);
-  const refreshSync = useSession((s) => s.refreshSync);
-  const requestSync = useSession((s) => s.requestSync);
   const signOut = useSession((s) => s.signOut);
+  const expire = useSession((s) => s.expire);
+  const snapshot = useLibrary((s) => s.snapshot);
+  const refreshing = useLibrary((s) => s.refreshing);
+  const persistent = useLibrary((s) => s.persistent);
+  const libraryError = useLibrary((s) => s.lastError);
+  const refreshLibrary = useLibrary((s) => s.refresh);
+  const downloadHistory = useLibrary((s) => s.download);
+  const loadHistoryFile = useLibrary((s) => s.loadFile);
+  const eraseLibrary = useLibrary((s) => s.erase);
   const router = useRouter();
-  const [refreshing, setRefreshing] = useState(false);
+  const [trivia, setTrivia] = useState<TriviaSummary | null>(null);
   const [mode, setMode] = useState<QuizMode>('side_a');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [length, setLength] = useState<RoundLength>(10);
@@ -37,37 +56,33 @@ export default function HomeScreen() {
   const [deleting, setDeleting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
-  // Ask for anything new since the last sync once per visit, then keep polling while band facts load.
+  // Tell the API which artists to load band facts for (it keeps nothing else about the library), then poll while they load.
   useEffect(() => {
-    if (!token) return;
+    if (!token || !snapshot) return;
+    const artists = triviaArtistsOf(snapshot);
+    const artistKeys = snapshot.artists.slice(0, artists.length).map((a) => a.key);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const poll = async () => {
-      const next = await refreshSync();
-      if (cancelled) return;
-      if (next && !next.trivia.ready) timer = setTimeout(poll, 5_000);
+    const ask = async (path: string, body: unknown) => {
+      try {
+        const next = await api<TriviaSummary>(path, { method: 'POST', token, body });
+        if (cancelled) return;
+        setTrivia(next);
+        if (!next.ready && next.running) timer = setTimeout(() => void ask('/v1/me/trivia', { artistKeys }), 5_000);
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) void expire();
+        else timer = setTimeout(() => void ask('/v1/me/trivia', { artistKeys }), 15_000);
+      }
     };
-    void requestSync()
-      .catch(() => undefined)
-      .then(poll);
+    void ask('/v1/me/library', { artists });
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [token, requestSync, refreshSync]);
+  }, [token, snapshot, expire]);
 
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      await requestSync();
-      await refreshSync();
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const ready = isLibraryReady(sync) && (sync?.scrobbleCount ?? 0) > 0;
-  const trivia = sync?.trivia ?? null;
+  const ready = (snapshot?.scrobbleCount ?? 0) > 0;
   const triviaReady = !!trivia?.ready;
   const modeAvailable = (key: QuizMode) => (key === 'side_a' || key === 'bracket' ? ready : ready && triviaReady);
   const triviaStatus = trivia
@@ -75,7 +90,7 @@ export default function HomeScreen() {
       ? `${trivia.readyArtists} of ${trivia.eligibleArtists} artists have band facts loaded`
       : trivia.running
         ? `Loading band facts: ${trivia.readyArtists} of ${trivia.eligibleArtists} artists ready`
-        : `Band facts not loaded yet (${trivia.readyArtists} of ${trivia.eligibleArtists}). Refresh to start.`
+        : `Band facts could not be loaded for enough artists yet (${trivia.readyArtists} of ${trivia.eligibleArtists}).`
     : null;
 
   const deleteAccount = async () => {
@@ -91,22 +106,23 @@ export default function HomeScreen() {
     } catch {
       // fall through: the local session is cleared either way
     }
+    await eraseLibrary();
     await signOut();
   };
 
   const effectiveMode: QuizMode = modeAvailable(mode) ? mode : 'side_a';
 
   const start = async () => {
-    if (!token) return;
+    if (!token || !snapshot) return;
     setStarting(true);
     setStartError(null);
     try {
       if (effectiveMode === 'bracket') {
-        const state = await api<BracketStateDto>('/v1/brackets', { method: 'POST', token, body: { size: bracketSize } });
+        const state = await api<BracketStateDto>('/v1/brackets', { method: 'POST', token, body: { size: bracketSize, stats: snapshot } });
         router.push({ pathname: '/bracket/[bracketId]', params: { bracketId: state.bracket.id } });
         return;
       }
-      const state = await api<RoundStateDto>('/v1/rounds', { method: 'POST', token, body: { mode: effectiveMode, difficulty, length } });
+      const state = await api<RoundStateDto>('/v1/rounds', { method: 'POST', token, body: { mode: effectiveMode, difficulty, length, stats: snapshot } });
       router.push({ pathname: '/play/[roundId]', params: { roundId: state.round.id } });
     } catch (error) {
       setStartError(error instanceof ApiError ? error.message : 'Could not start a round');
@@ -130,13 +146,16 @@ export default function HomeScreen() {
 
         <View style={styles.libraryRow}>
           <Text style={styles.libraryText}>
-            {sync ? `${sync.scrobbleCount.toLocaleString()} scrobbles on tape` : 'Checking your tape…'}
-            {sync?.newestPlayedAt ? ` · latest ${new Date(sync.newestPlayedAt).toLocaleDateString()}` : ''}
+            {snapshot ? `${snapshot.scrobbleCount.toLocaleString()} scrobbles on tape` : 'Checking your tape…'}
+            {snapshot?.newestPlayedAt ? ` · latest ${new Date(snapshot.newestPlayedAt * 1000).toLocaleDateString()}` : ''}
           </Text>
-          <Pressable accessibilityRole="button" onPress={() => void refresh()} disabled={refreshing} style={({ pressed }) => [styles.refresh, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" onPress={() => void refreshLibrary(true)} disabled={refreshing} style={({ pressed }) => [styles.refresh, pressed && styles.pressed]}>
             <Text style={styles.refreshLabel}>{refreshing ? 'SYNCING…' : 'REFRESH'}</Text>
           </Pressable>
         </View>
+
+        {libraryError ? <Text style={styles.error}>{libraryError}</Text> : null}
+        {!persistent ? <Text style={styles.muted}>This browser would not store your history, so it is kept for this tab only and will be downloaded again next time.</Text> : null}
 
         <Text style={styles.sectionTitle}>PICK A SIDE</Text>
         <View style={styles.modes}>
@@ -203,6 +222,16 @@ export default function HomeScreen() {
             Terms
           </Link>
           <SupportLink compact />
+          {fileTransferSupported ? (
+            <>
+              <Pressable accessibilityRole="button" onPress={() => void downloadHistory()}>
+                <Text style={styles.footerLink}>Download my history</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => void loadHistoryFile()} disabled={refreshing}>
+                <Text style={styles.footerLink}>Load a history file</Text>
+              </Pressable>
+            </>
+          ) : null}
           <Pressable accessibilityRole="button" onPress={() => void deleteAccount()} disabled={deleting}>
             <Text style={[styles.footerLink, confirmDelete && styles.danger]}>{deleting ? 'Deleting…' : confirmDelete ? 'Press again to delete everything' : 'Delete my account and data'}</Text>
           </Pressable>

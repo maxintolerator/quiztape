@@ -33,4 +33,4 @@ export const artistResolutions = pgTable(
     index('artist_resolutions_mbid_idx').on(t.mbid).where(sql`${t.mbid} is not null`),
     index('artist_resolutions_retry_idx').on(t.nextAttemptAt).where(sql`${t.status} = 'pending'`),
   ],
-);
+).enableRLS();

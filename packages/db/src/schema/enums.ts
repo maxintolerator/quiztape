@@ -4,7 +4,7 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 // ---- auth / sync
 export const clientPlatform = pgEnum('client_platform', ['web', 'ios', 'android']);
 export const lastfmSessionStatus = pgEnum('lastfm_session_status', ['active', 'revoked']);
-export const syncPhase = pgEnum('sync_phase', ['pending', 'backfilling', 'complete', 'privacy_blocked', 'error']);
+/** Only `mb_ingest` and `wd_enrich` are still queued; the history kinds remain for old rows. */
 export const syncJobKind = pgEnum('sync_job_kind', ['backfill', 'incremental', 'stats_rebuild', 'top_charts', 'mb_ingest', 'wd_enrich']);
 export const jobStatus = pgEnum('job_status', ['queued', 'running', 'succeeded', 'failed', 'cancelled']);
 
