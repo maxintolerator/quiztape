@@ -81,7 +81,9 @@ describe('rounds', () => {
       const { round } = (await created.json()) as RoundStateDto;
       const rows = await services.db.select().from(schema.roundQuestions).where(eq(schema.roundQuestions.roundId, round.id));
       for (const row of rows) {
-        expect(`${row.prompt} ${row.correctDisplay} ${JSON.stringify(row.payload)}`).not.toMatch(/19[67]\d/);
+        // Option ids are random hex and can contain "1979" by chance; only the words a player reads count.
+        const payload = JSON.stringify(row.payload).replace(/"id":"[0-9a-f]+"/g, '"id":""');
+        expect(`${row.prompt} ${row.correctDisplay} ${payload}`).not.toMatch(/19[67]\d/);
         expect(row.anchorYear === null || row.anchorYear >= 2002).toBe(true);
       }
       await services.db.delete(schema.rounds).where(eq(schema.rounds.id, round.id));
