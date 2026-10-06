@@ -2,7 +2,7 @@
 
 Side A: stats. Side B: trivia. A Last.fm-powered music quiz shipped as one Expo Router codebase to web, iOS and Android, with a thin Node API and Postgres behind it. The listening history lives on the player's device; Postgres holds accounts, rounds and the shared MusicBrainz cache.
 
-The product brief is the source of truth: `docs/BRIEF.md`, as amended by `docs/DECISIONS.md` (the 2026-10-03 entry moved the history out of Postgres and onto the device). The schema is documented in `docs/SCHEMA.md`. Platform divergences are logged in `docs/PLATFORMS.md`. Third-party terms that constrain the product are in `docs/COMPLIANCE.md`. Do not re-litigate the stack.
+The product brief is the source of truth: `docs/BRIEF.md`, as amended by `docs/DECISIONS.md` (the 2026-10-03 entry moved the history out of Postgres and onto the device; the 2026-10-05 entry replaced Last.fm login with typing a username, removed the bracket and limited rank questions to the top 20). The schema is documented in `docs/SCHEMA.md`. Platform divergences are logged in `docs/PLATFORMS.md`. Third-party terms that constrain the product are in `docs/COMPLIANCE.md`. Do not re-litigate the stack.
 
 Requires Node 22.13 or newer (Expo SDK 57 floor).
 
@@ -10,11 +10,11 @@ Requires Node 22.13 or newer (Expo SDK 57 floor).
 
 ```
 apps/client      Expo Router app (web + iOS + Android). No secrets. One third-party call: it reads the player's own history from Last.fm and keeps it on the device.
-apps/api         Hono API + in-process job runner. Last.fm sign-in, all MusicBrainz/Claude calls and the question engine (src/engine) live here. Stores no listening history.
+apps/api         Hono API + in-process job runner. Username sign-in (checked with Last.fm user.getInfo), all MusicBrainz/Claude calls and the question engine (src/engine) live here. Stores no listening history.
 packages/shared  Types and constants shared by client and API, plus the device-side library: history download, local store, stats snapshot. Dependency-free, platform-neutral.
 packages/db      Drizzle schema, migrations, Postgres client (Supabase-compatible).
 packages/ratelimit  Token-bucket limiter + retry/backoff used by every upstream client.
-packages/lastfm  Server-side Last.fm client: signing, session auth. ~5 req/s.
+packages/lastfm  Server-side Last.fm client (signing is supported but unused: sign-in needs no Last.fm login). ~5 req/s.
 packages/musicbrainz  MusicBrainz WS/2 client. Strict 1 req/s, mandatory User-Agent. The only source of trivia facts.
 docs/            Brief, schema, decisions, platform log.
 ```
@@ -40,8 +40,8 @@ npm run render-docs -w @quiztape/db   # regenerate docs/SCHEMA.md after a schema
 ## Rules that are not negotiable
 
 - **Cross-platform from the first commit.** No web-only API without a native equivalent. Platform-specific files (`*.web.tsx`, `*.native.tsx`) are the escape hatch; every divergence gets a line in `docs/PLATFORMS.md` before it is written. `npm run check:platforms` must pass before a feature is done.
-- **No secrets in the client.** Only `EXPO_PUBLIC_*` variables reach the bundle; nothing in `apps/client` imports `@quiztape/lastfm`, `@quiztape/musicbrainz` or `@quiztape/db`. The Last.fm API key (an identifier, not the secret) is handed to signed-in clients by `/v1/me`.
-- **The listening history stays on the device.** The client downloads it from Last.fm (`@quiztape/shared` `importLibrary`), stores it locally and sends a stats snapshot with each round or bracket request. The API never persists scrobbles or per-user stats, and derives keys, ranks and difficulty from the snapshot itself rather than trusting them.
+- **No secrets in the client.** Only `EXPO_PUBLIC_*` variables reach the bundle; nothing in `apps/client` imports `@quiztape/lastfm`, `@quiztape/musicbrainz` or `@quiztape/db`. The Last.fm API key (an identifier, not the secret) is handed to signed-in clients by `/v1/me`. Players sign in by typing their Last.fm username; there is no Last.fm OAuth.
+- **The listening history stays on the device.** The client downloads it from Last.fm (`@quiztape/shared` `importLibrary`), stores it locally and sends a stats snapshot with each round request. The API never persists scrobbles or per-user stats, and derives keys, ranks and difficulty from the snapshot itself rather than trusting them.
 - **MusicBrainz is the only source of trivia facts.** Never generate facts from an LLM. Claude is garnish: rephrasing and ambiguous-answer grading only.
 - **Cache aggressively.** The device fetches only plays newer than what it holds. MusicBrainz facts are cached in Postgres by MBID with a negative cache for not-found, shared by all players, and fetched for each player's 50 most played artists.
 - **Empty and error states are first class.** Thin libraries, upstream outages and artists missing from MusicBrainz are normal paths, not exceptions.

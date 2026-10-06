@@ -77,6 +77,20 @@ describe('LastfmClient', () => {
     expect(params.get('format')).toBe('json');
   });
 
+  it('reads without the secret, and refuses a signed call without one before sending it', async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return jsonResponse({ user: { name: 'someone' } });
+    };
+    const client = new LastfmClient({ apiKey: 'KEY', fetch: fetchImpl as unknown as typeof fetch });
+    const info = client.getUserInfo('someone');
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(info).resolves.toMatchObject({ user: { name: 'someone' } });
+    await expect(client.getSession('TOKEN')).rejects.toThrow(/needs apiSecret/);
+    expect(calls).toHaveLength(1);
+  });
+
   it('turns body-level API errors into LastfmApiError even on HTTP 200', async () => {
     const { client } = makeClient([() => jsonResponse({ error: 6, message: 'User not found' })]);
     const promise = client.getUserInfo('ghost').catch((e: unknown) => e);

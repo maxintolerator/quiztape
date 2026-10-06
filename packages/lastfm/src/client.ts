@@ -28,7 +28,8 @@ export const RECENT_TRACKS_MAX_LIMIT = 200;
 
 export interface LastfmClientOptions {
   apiKey: string;
-  apiSecret: string;
+  /** Needed only for signed calls (auth.getSession, anything with a session key). */
+  apiSecret?: string | undefined;
   fetch?: typeof globalThis.fetch | undefined;
   /** Share one limiter per process so all callers respect the same ~5 req/s. */
   limiter?: RateLimiter | undefined;
@@ -60,7 +61,7 @@ export interface RequestOptions {
 export class LastfmClient {
   readonly limiter: RateLimiter;
   private readonly apiKey: string;
-  private readonly apiSecret: string;
+  private readonly apiSecret: string | undefined;
   private readonly fetchImpl: typeof globalThis.fetch;
   private readonly baseUrl: string;
   private readonly userAgent: string;
@@ -70,7 +71,6 @@ export class LastfmClient {
 
   constructor(options: LastfmClientOptions) {
     if (!options.apiKey) throw new Error('LastfmClient: apiKey is required');
-    if (!options.apiSecret) throw new Error('LastfmClient: apiSecret is required');
     this.apiKey = options.apiKey;
     this.apiSecret = options.apiSecret;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
@@ -131,7 +131,10 @@ export class LastfmClient {
       query[key] = typeof value === 'boolean' ? (value ? '1' : '0') : String(value);
     }
     if (options.sessionKey) query['sk'] = options.sessionKey;
-    if (options.signed || options.sessionKey) query['api_sig'] = sign(query, this.apiSecret);
+    if (options.signed || options.sessionKey) {
+      if (!this.apiSecret) throw new Error(`LastfmClient: ${method} is signed and needs apiSecret`);
+      query['api_sig'] = sign(query, this.apiSecret);
+    }
     query['format'] = 'json';
 
     const httpMethod = options.httpMethod ?? (options.sessionKey ? 'POST' : 'GET');

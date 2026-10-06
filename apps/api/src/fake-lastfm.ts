@@ -3,17 +3,19 @@ import type { RecentTrack } from '@quiztape/lastfm';
 import { jsonResponse } from './testing';
 
 /**
- * Scripted Last.fm for tests: answers auth.getSession, user.getInfo and a
- * paginated user.getRecentTracks from an in-memory history.
+ * Scripted Last.fm for tests: answers user.getInfo (error 6 for anyone but
+ * the one scripted user) and a paginated user.getRecentTracks from an
+ * in-memory history.
  */
 export interface FakeLastfmOptions {
   username?: string;
-  sessionKey?: string;
   history?: RecentTrack[];
   nowPlaying?: RecentTrack | null;
   perPage?: number;
   /** Fail user.getRecentTracks with this Last.fm error code once per call until cleared. */
   recentTracksError?: number | null;
+  /** Fail user.getInfo the same way. */
+  userInfoError?: number | null;
 }
 
 export function track(uts: number, artist: string, name: string, album: string | null = null): RecentTrack {
@@ -33,11 +35,11 @@ export function track(uts: number, artist: string, name: string, album: string |
 export function createFakeLastfm(options: FakeLastfmOptions = {}) {
   const state = {
     username: options.username ?? 'someone',
-    sessionKey: options.sessionKey ?? 'a'.repeat(32),
     history: [...(options.history ?? [])].sort((a, b) => Number(b.date!.uts) - Number(a.date!.uts)),
     nowPlaying: options.nowPlaying ?? null,
     perPage: options.perPage ?? 200,
     recentTracksError: options.recentTracksError ?? null,
+    userInfoError: options.userInfoError ?? null,
     calls: [] as URL[],
   };
 
@@ -49,10 +51,9 @@ export function createFakeLastfm(options: FakeLastfmOptions = {}) {
     state.calls.push(url);
     const method = url.searchParams.get('method');
     switch (method) {
-      case 'auth.getSession':
-        if (url.searchParams.get('token') === 'BAD') return jsonResponse({ error: 14, message: 'This token has not been authorized' }, 403);
-        return jsonResponse({ session: { name: state.username, key: state.sessionKey, subscriber: 0 } });
       case 'user.getInfo':
+        if (state.userInfoError) return jsonResponse({ error: state.userInfoError, message: 'scripted error' }, 500);
+        if (url.searchParams.get('user')?.toLowerCase() !== state.username.toLowerCase()) return jsonResponse({ error: 6, message: 'User not found' }, 404);
         return jsonResponse({
           user: {
             name: state.username,

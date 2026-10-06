@@ -9,13 +9,12 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
   DATABASE_URL: z.url(),
   LASTFM_API_KEY: z.string().min(1, 'LASTFM_API_KEY is required'),
-  LASTFM_API_SECRET: z.string().min(1, 'LASTFM_API_SECRET is required'),
-  LASTFM_CALLBACK_URL: z.url(),
+  /** Only signed Last.fm calls need it, and sign-in by username makes none. */
+  LASTFM_API_SECRET: z.string().optional(),
   MUSICBRAINZ_APP_NAME: z.string().min(1).default('Quiztape'),
   MUSICBRAINZ_APP_VERSION: z.string().min(1).default('0.1.0'),
   MUSICBRAINZ_CONTACT: z.string().min(3, 'MusicBrainz requires a contact email or URL in the User-Agent'),
   ANTHROPIC_API_KEY: z.string().optional(),
-  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
   /** Run the background job runner inside this process. Off for pure request-serving instances. */
   WORKER_ENABLED: z
     .string()

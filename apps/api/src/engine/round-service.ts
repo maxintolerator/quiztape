@@ -43,8 +43,6 @@ type QuestionRow = typeof schema.roundQuestions.$inferSelect;
 
 export async function createRound(services: Services, userId: string, request: CreateRoundRequest): Promise<RoundStateDto> {
   const { db, now } = services;
-  if (request.mode === 'bracket') throw new RoundError(400, 'mode_not_available', 'Bracket arrives in build step 6.');
-
   const stats = engineStats(request.stats);
   const eligible = stats.artists.length;
   if (eligible < MIN_ARTISTS_FOR_ROUND) {

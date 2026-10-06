@@ -25,9 +25,9 @@ export const OPERATOR = {
 
 export const PRIVACY_POLICY: LegalDocument = {
   title: 'Privacy Policy',
-  effectiveDate: '2026-10-03',
+  effectiveDate: '2026-10-05',
   intro:
-    'Quiztape turns your Last.fm listening history into a music quiz. It is a non-commercial project run by a private individual, not a company. This policy explains what data Quiztape handles, why, where it lives, and how you can get rid of it. Connecting your Last.fm account means you have read this policy and agree to it.',
+    'Quiztape turns your Last.fm listening history into a music quiz. It is a non-commercial project run by a private individual, not a company. This policy explains what data Quiztape handles, why, where it lives, and how you can get rid of it. Signing in with your Last.fm username means you have read this policy and agree to it.',
   sections: [
     {
       heading: 'Who is responsible',
@@ -40,8 +40,8 @@ export const PRIVACY_POLICY: LegalDocument = {
       paragraphs: [
         'Last.fm account data: your Last.fm username, profile URL, the real name and country you made public on Last.fm, your registration date and total play count. Quiztape uses these to identify your account and show your name in the app.',
         'Listening history: every scrobble Last.fm reports for your account (artist, track, album and timestamp). Your browser or app downloads this history directly from Last.fm and keeps it on your own device; it is not stored on Quiztape’s servers. It fetches only new plays when you open the app or press refresh, and all quiz statistics are computed on your device from this copy.',
-        'Library summary: when you start a round or a bracket, your device sends a summary of your library (your most played artists with play counts, their top tracks and albums, first-play dates and yearly chart toppers) so the server can write the questions. The summary is used for that request and not kept; what is kept are the questions it produced, which mention the artists, tracks and play counts they ask about. The names of your 50 most played artists are also sent so that public facts about those artists can be looked up; they sit in the server’s work queue while that happens.',
-        'Last.fm session key: the key Last.fm issues when you approve Quiztape. It is stored encrypted and used only to read data. Quiztape never scrobbles, loves, tags or changes anything on your Last.fm account.',
+        'Library summary: when you start a round, your device sends a summary of your library (your most played artists with play counts, their top tracks and albums, first-play dates and yearly chart toppers) so the server can write the questions. The summary is used for that request and not kept; what is kept are the questions it produced, which mention the artists, tracks and play counts they ask about. The names of your 50 most played artists are also sent so that public facts about those artists can be looked up; they sit in the server’s work queue while that happens.',
+        'No Last.fm login: you sign in by typing your Last.fm username. Quiztape never asks for your Last.fm password, holds no key to your Last.fm account, and can only read what your Last.fm profile already shows publicly. It never scrobbles, loves, tags or changes anything on your Last.fm account. Because a username is all it takes, anyone who types yours can play quizzes cut from your public listening history (which anyone can already browse on Last.fm), and their rounds are filed under that username.',
         'Quiz data: the rounds you play, the questions asked, your answers, scores, streaks and your settings (difficulty, timer, optional question categories).',
         'Technical data: a login token for your device (stored as a hash on the server and in secure storage or browser storage on your device), the platform you use (web, iOS, Android), and short-lived server logs that include your IP address for error diagnosis and abuse prevention.',
         'Optional AI grading: if enabled in settings, the text of a quiz question and the answer you typed may be sent to Anthropic (Claude API) to judge an ambiguous free-text answer or to rephrase a question. Your listening history, username and account data are never sent.',
@@ -50,7 +50,7 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'Why',
       paragraphs: [
-        'Quiztape processes this data for one reason: to provide the service you asked for by connecting your account. That means generating questions from your library, grading your answers and remembering your results. The optional AI grading only runs if you switch it on in settings, and you can switch it off again at any time.',
+        'Quiztape processes this data for one reason: to provide the service you asked for by signing in with your username. That means generating questions from your library, grading your answers and remembering your results. The optional AI grading only runs if you switch it on in settings, and you can switch it off again at any time.',
         'Quiztape does not show advertising, does not use analytics or tracking services, does not build profiles for anyone else and does not sell, rent or share your data for money or for marketing.',
       ],
     },
@@ -66,16 +66,15 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'How long data is kept',
       paragraphs: [
-        'Your account data and quiz data are kept for as long as you have a Quiztape account. When you delete your account in the app, everything Quiztape holds about you is deleted immediately, including your session key, rounds and answers, and the copy of your listening history on the device you are using is erased. Copies on other devices or browsers you used stay there until you clear that browser’s site data or uninstall the app. Cached facts about artists and albums are not personal data and are kept.',
+        'Your account data and quiz data are kept for as long as you have a Quiztape account. When you delete your account in the app, everything Quiztape holds about you is deleted immediately, including your rounds and answers, and the copy of your listening history on the device you are using is erased. Copies on other devices or browsers you used stay there until you clear that browser’s site data or uninstall the app. Cached facts about artists and albums are not personal data and are kept.',
         'Server logs are deleted after at most 30 days.',
-        'You can also revoke Quiztape’s access in your Last.fm settings under Applications. That invalidates the session key; your Quiztape account and its data remain until you delete them.',
       ],
     },
     {
       heading: 'Your choices',
       paragraphs: [
         'You can delete your account and every piece of data Quiztape holds about you directly in the app, at any time, no questions asked. If you would like a copy of your data or want something corrected, email the address above and it will be handled within 30 days.',
-        'You can also cut Quiztape off at the source by removing it under Applications in your Last.fm settings.',
+        'You can also cut Quiztape off at the source by turning on “Hide recent listening information” in your Last.fm privacy settings; Quiztape can then read no new plays.',
       ],
     },
     {
@@ -97,22 +96,22 @@ export const PRIVACY_POLICY: LegalDocument = {
 
 export const TERMS_OF_USE: LegalDocument = {
   title: 'Terms of Use',
-  effectiveDate: '2026-10-03',
+  effectiveDate: '2026-10-05',
   intro:
-    'Quiztape is a free, non-commercial music quiz made by one person for fun. These terms keep expectations honest on both sides. By connecting your Last.fm account you agree to them; if you do not, please do not use Quiztape.',
+    'Quiztape is a free, non-commercial music quiz made by one person for fun. These terms keep expectations honest on both sides. By signing in with a Last.fm username you agree to them; if you do not, please do not use Quiztape.',
   sections: [
     {
       heading: 'The service',
       paragraphs: [
         `Quiztape (${OPERATOR.appDomain}) is provided by ${OPERATOR.name} (${OPERATOR.homepage}) as a hobby project. It builds quiz rounds from your own Last.fm listening history and from public music facts. It is offered free of charge and without any commercial purpose.`,
-        'A Last.fm account is required. Quiztape reads your listening data through the official Last.fm API only with your approval and never writes to your Last.fm account.',
+        'A Last.fm account is required. You sign in with your Last.fm username; Quiztape reads only the listening data your Last.fm profile shows publicly, through the official Last.fm API, and never writes to your Last.fm account.',
       ],
     },
     {
       heading: 'What you agree to',
       paragraphs: [
-        'Use Quiztape only with a Last.fm account you are entitled to use. Do not attempt to access other people’s data, to interfere with the service, to circumvent rate limits, or to scrape, copy or resell data obtained through Quiztape.',
-        'You are responsible for keeping your device and login secure. Anyone with access to your logged-in device can play as you.',
+        'Sign in with your own Last.fm username. Do not attempt to interfere with the service, to circumvent rate limits, or to scrape, copy or resell data obtained through Quiztape.',
+        'There is no password: anyone who types a Last.fm username plays under it, and anyone with access to your signed-in device can play as you. Do not rely on Quiztape to keep your quiz history private.',
       ],
     },
     {

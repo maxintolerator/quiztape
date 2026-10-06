@@ -41,7 +41,13 @@ export interface MeResponse {
   lastfm: { apiKey: string };
 }
 
-export interface ExchangeResponse {
+export interface SignInRequest {
+  /** A Last.fm username, in any capitalisation. */
+  username: string;
+  platform: ClientPlatform;
+}
+
+export interface SignInResponse {
   token: string;
   user: PublicUser;
 }

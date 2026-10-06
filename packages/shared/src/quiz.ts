@@ -1,8 +1,8 @@
 /**
  * The cassette vocabulary. Side A = the user's own stats, Side B = trivia
- * about the artists in their library, Mixtape = both, Bracket = tournament.
+ * about the artists in their library, Mixtape = both.
  */
-export const QUIZ_MODES = ['side_a', 'side_b', 'mixtape', 'bracket'] as const;
+export const QUIZ_MODES = ['side_a', 'side_b', 'mixtape'] as const;
 export type QuizMode = (typeof QUIZ_MODES)[number];
 
 export const DIFFICULTIES = ['easy', 'medium', 'hard', 'deep_cut'] as const;

@@ -4,7 +4,6 @@ import { MusicBrainzClient } from '@quiztape/musicbrainz';
 import { RateLimiter } from '@quiztape/ratelimit';
 import { type LocalScrobble, type RawRecentTrack, type StatsSnapshot, buildStatsSnapshot, scrobbleFromRecentTrack } from '@quiztape/shared';
 
-import { deriveKey } from './lib/crypto';
 import type { Services } from './services';
 
 export type FakeFetch = (url: string, init?: RequestInit) => Response | Promise<Response>;
@@ -21,16 +20,11 @@ export async function createTestServices(options: { fetch?: FakeFetch; now?: () 
   const fast = () => new RateLimiter({ requestsPerSecond: 10_000, burst: 10_000, concurrency: 8 });
   return {
     db,
-    lastfm: new LastfmClient({ apiKey: 'KEY', apiSecret: 'SECRET', fetch: fetchImpl, retry: noRetry, limiter: fast() }),
+    lastfm: new LastfmClient({ apiKey: 'KEY', fetch: fetchImpl, retry: noRetry, limiter: fast() }),
     musicbrainz: new MusicBrainzClient({ appName: 'QuiztapeTest', appVersion: '0', contact: 'test@example.com', fetch: fetchImpl, retry: noRetry, limiter: fast() }),
-    sessionKeyKey: deriveKey('test-secret-test-secret-test-secret-1234', 'lastfm-session-key'),
     config: {
-      apiBaseUrl: 'http://localhost:8787',
-      lastfmCallbackUrl: 'http://localhost:8787/v1/auth/lastfm/callback',
       lastfmApiKey: 'KEY',
       corsOrigins: ['http://localhost:8081'],
-      allowedReturnOrigins: ['http://localhost:8081'],
-      nativeScheme: 'quiztape',
       appSessionTtlMs: 90 * 24 * 60 * 60 * 1000,
     },
     now: options.now ?? (() => new Date()),

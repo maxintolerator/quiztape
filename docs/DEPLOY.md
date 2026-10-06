@@ -20,22 +20,16 @@ Serverless is deliberately not used for the API: MusicBrainz ingestion runs as a
 
 ## 1. Production environment values
 
-Generate a secret once and keep it safe; rotating it invalidates every stored Last.fm session key:
-
-```
-node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-```
-
 | Variable | Value |
 | --- | --- |
 | `DATABASE_URL` | Supabase **transaction pooler** URL (port 6543) |
 | `DATABASE_MIGRATE_URL` | Supabase **direct** URL (port 5432) |
-| `LASTFM_API_KEY` / `LASTFM_API_SECRET` | from your Last.fm API account |
-| `LASTFM_CALLBACK_URL` | `https://api.quiztape.com/v1/auth/lastfm/callback` |
+| `LASTFM_API_KEY` | from your Last.fm API account (players sign in with their username, so the shared secret is not needed) |
 | `CORS_ORIGINS` | `https://quiztape.com,https://www.quiztape.com` |
 | `MUSICBRAINZ_APP_NAME` / `MUSICBRAINZ_APP_VERSION` / `MUSICBRAINZ_CONTACT` | `Quiztape` / `0.1.0` / your email |
-| `SESSION_SECRET` | the generated secret |
 | `ANTHROPIC_API_KEY` | optional, only for AI grading |
+
+`LASTFM_API_SECRET`, `LASTFM_CALLBACK_URL` and `SESSION_SECRET` were used by the old Last.fm redirect sign-in (removed 2026-10-05). The API ignores them; remove them with `flyctl secrets unset LASTFM_API_SECRET LASTFM_CALLBACK_URL SESSION_SECRET` whenever convenient.
 
 ## 2. API on Fly.io
 
@@ -44,10 +38,9 @@ From the repository root (the Dockerfile expects the repo as build context):
 ```
 flyctl launch --copy-config --no-deploy     # uses fly.toml; answer "No" to tweaking settings; if the name is taken pick another
 flyctl secrets set DATABASE_URL='...' DATABASE_MIGRATE_URL='...' \
-  LASTFM_API_KEY='...' LASTFM_API_SECRET='...' \
-  LASTFM_CALLBACK_URL='https://api.quiztape.com/v1/auth/lastfm/callback' \
+  LASTFM_API_KEY='...' \
   CORS_ORIGINS='https://quiztape.com,https://www.quiztape.com' \
-  MUSICBRAINZ_CONTACT='max@intolerator.com' SESSION_SECRET='...'
+  MUSICBRAINZ_CONTACT='max@intolerator.com'
 flyctl deploy                                # remote build of apps/api/Dockerfile, runs `npm run db:migrate`, starts one machine
 flyctl logs                                  # expect: "quiztape-api listening" and "job runner fly-1 started"
 ```
@@ -98,7 +91,7 @@ The current Cloudflare dashboard creates a **Worker** with static assets when yo
    | Root directory | leave as `/` (the npm workspace root) |
 
 4. **Build variables** (Settings → Build → Variables and secrets, for the production branch): `EXPO_PUBLIC_API_URL` = `https://api.quiztape.com`, `NODE_VERSION` = `22`. The API URL is baked into the bundle at build time, so changing it later means a rebuild.
-5. **Save and Deploy.** First build takes 3–5 minutes. The result is live at the `workers.dev` URL; test the connect flow there first (add that origin to `CORS_ORIGINS` on Fly temporarily if you want sign-in to work before the custom domain exists).
+5. **Save and Deploy.** First build takes 3–5 minutes. The result is live at the `workers.dev` URL; test sign-in there first (add that origin to `CORS_ORIGINS` on Fly temporarily if you want sign-in to work before the custom domain exists).
 
 ### 3b-B. Deploy from your laptop (no GitHub)
 
@@ -119,16 +112,16 @@ Repeat the export and the last command for every release.
 3. Optional redirect from `www` to the bare domain: **Rules → Redirect Rules** or a Bulk Redirect; not required.
 4. `https://quiztape.com/privacy` should load within a minute or two once the certificate is issued.
 
-Deep links such as `/auth/callback?code=...` and `/play/<id>` resolve to the app because `wrangler.jsonc` sets `not_found_handling` to single-page-application. Do not add a `public/_redirects` file: Workers static hosting rejects a catch-all rewrite to `index.html` as a redirect loop. (Netlify or Pages would need one; use `/*  /index.html  200` there.)
+Deep links such as `/play/<id>` and `/results/<id>` resolve to the app because `wrangler.jsonc` sets `not_found_handling` to single-page-application. Do not add a `public/_redirects` file: Workers static hosting rejects a catch-all rewrite to `index.html` as a redirect loop. (Netlify or Pages would need one; use `/*  /index.html  200` there.)
 
 ## 4. Last.fm API account
 
-In https://www.last.fm/api/accounts set the callback URL to `https://api.quiztape.com/v1/auth/lastfm/callback`. The app also passes the callback explicitly on every request, so local development keeps working with the localhost URL in `.env`.
+Only the API key is used. Players type their Last.fm username and nobody is sent to Last.fm to log in, so the callback URL in https://www.last.fm/api/accounts is not used.
 
 ## 5. Smoke test
 
 1. `curl https://api.quiztape.com/health` returns `{"ok":true,...}`.
-2. Open `https://quiztape.com`, press Connect, approve on Last.fm, land on the sync screen, watch the percentage climb, land on the config screen, play a Side A round.
+2. Open `https://quiztape.com`, enter a Last.fm username, land on the sync screen, watch the percentage climb, land on the config screen, play a Side A round. A made-up username should say Last.fm has no such user.
 3. `fly logs` shows `POST /v1/me/library` followed by MusicBrainz ingestion, and no errors. The history download itself happens in the browser and never appears in the API logs.
 4. `https://quiztape.com/privacy` and `/terms` render with your details filled in.
 
@@ -139,11 +132,10 @@ cd apps/client
 npx eas init                                  # links the project to your Expo account
 ```
 
-Add `"env": { "EXPO_PUBLIC_API_URL": "https://api.quiztape.com" }` to the `preview` and `production` profiles in `eas.json`, change the bundle identifier and package from the `com.quiztape.app` placeholders, then `eas build --platform all --profile production` and `eas submit`. The sign-in redirect uses the `quiztape://` scheme, which works in development and store builds but not in Expo Go.
+Add `"env": { "EXPO_PUBLIC_API_URL": "https://api.quiztape.com" }` to the `preview` and `production` profiles in `eas.json`, change the bundle identifier and package from the `com.quiztape.app` placeholders, then `eas build --platform all --profile production` and `eas submit`. Sign-in is a username form with no redirect, so it works in Expo Go as well.
 
 ## 7. Operating it
 
 - Logs: `flyctl logs`. Job state: `npm run db:jobs` with production URLs in `.env`.
 - Backups: enable Supabase's daily backups (Settings, Database).
-- Deploys: `flyctl deploy` runs migrations first; the job runner hands back any in-flight job on shutdown and resumes from its checkpoint.
-- Secret rotation: a new `SESSION_SECRET` means every user reconnects Last.fm once (the `key_version` column exists for a gentler rotation later).
+- Deploys: `flyctl deploy` runs migrations first; the job runner hands back any in-flight job on shutdown and resumes from its checkpoint. Deploy the API and the web app together when a release removes routes the other side calls (2026-10-05: the old web bundle's Connect button and bracket calls 404 against the new API until the new bundle is live).

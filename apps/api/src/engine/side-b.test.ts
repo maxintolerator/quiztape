@@ -169,9 +169,4 @@ describe('Side B and Mixtape rounds', () => {
     const sides = new Set(rows.map((r) => (r.category.startsWith('stats_') ? 'a' : 'b')));
     expect(sides).toEqual(new Set(['a', 'b']));
   });
-
-  it('still refuses bracket', async () => {
-    const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'bracket', difficulty: 'easy', length: 5, stats }) }));
-    expect(res.status).toBe(400);
-  });
 });

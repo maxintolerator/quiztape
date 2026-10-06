@@ -29,6 +29,13 @@
       "when": 1791041727316,
       "tag": "0003_lame_ogun",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791217245786,
+      "tag": "0004_username_sign_in_no_bracket",
+      "breakpoints": true
     }
   ]
 }

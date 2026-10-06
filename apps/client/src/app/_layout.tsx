@@ -25,8 +25,8 @@ const quiztapeTheme = {
   },
 };
 
-/** Routes reachable without a session. Everything else requires Last.fm login. */
-const PUBLIC_ROUTES = new Set(['/', '/auth/callback', '/privacy', '/terms', '/_sitemap']);
+/** Routes reachable without a session. Everything else requires signing in with a Last.fm username. */
+const PUBLIC_ROUTES = new Set(['/', '/privacy', '/terms', '/_sitemap']);
 
 /**
  * Three states, three doors: anonymous -> connect; authenticated but the

@@ -29,8 +29,13 @@ describe('api basics', () => {
   });
 
   it('protects every game route with the bearer session', async () => {
-    expect((await app.request('/v1/brackets', { method: 'POST' })).status).toBe(401);
     expect((await app.request('/v1/rounds', { method: 'POST' })).status).toBe(401);
+  });
+
+  it('no longer serves the bracket or the Last.fm redirect sign-in', async () => {
+    expect((await app.request('/v1/brackets', { method: 'POST' })).status).toBe(404);
+    expect((await app.request('/v1/auth/lastfm/start?platform=web')).status).toBe(404);
+    expect((await app.request('/v1/auth/exchange', { method: 'POST' })).status).toBe(404);
   });
 
   it('returns JSON 404 for unknown routes and 401 without a token', async () => {
@@ -45,68 +50,49 @@ describe('api basics', () => {
   });
 });
 
-describe('Last.fm web auth flow', () => {
-  let code: string;
+describe('sign-in by Last.fm username', () => {
   let token: string;
+  const signIn = (body: unknown) => app.request('/v1/auth/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-  it('start redirects to Last.fm with our callback and a state', async () => {
-    const res = await app.request('/v1/auth/lastfm/start?platform=web&return_to=http%3A%2F%2Flocalhost%3A8081%2Fauth%2Fcallback');
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get('location')!);
-    expect(location.origin + location.pathname).toBe('https://www.last.fm/api/auth/');
-    expect(location.searchParams.get('api_key')).toBe('KEY');
-    const cb = new URL(location.searchParams.get('cb')!);
-    expect(cb.origin + cb.pathname).toBe('http://localhost:8787/v1/auth/lastfm/callback');
-    expect(cb.searchParams.get('state')).toMatch(/^[A-Za-z0-9_-]{20,}$/);
-
-    // Callback: Last.fm appends &token= to our cb URL.
-    const callback = await app.request(`/v1/auth/lastfm/callback?state=${cb.searchParams.get('state')}&token=TOKEN1`);
-    expect(callback.status).toBe(302);
-    const back = new URL(callback.headers.get('location')!);
-    expect(back.origin + back.pathname).toBe('http://localhost:8081/auth/callback');
-    code = back.searchParams.get('code')!;
-    expect(code).toMatch(/^[A-Za-z0-9_-]{20,}$/);
-
-    // Replaying the callback cannot mint another code or hit Last.fm again.
-    const replay = await app.request(`/v1/auth/lastfm/callback?state=${cb.searchParams.get('state')}&token=TOKEN1`);
-    expect(new URL(replay.headers.get('location')!).searchParams.get('error')).toBe('already_used');
-    expect(fake.state.calls.filter((u) => u.searchParams.get('method') === 'auth.getSession')).toHaveLength(1);
-  });
-
-  it('rejects return_to outside the allowed origins and unknown platforms', async () => {
-    expect((await app.request('/v1/auth/lastfm/start?platform=web&return_to=https%3A%2F%2Fevil.example%2Fcb')).status).toBe(400);
-    expect((await app.request('/v1/auth/lastfm/start?platform=tv')).status).toBe(400);
-    const native = await app.request('/v1/auth/lastfm/start?platform=ios');
-    expect(native.status).toBe(302);
-  });
-
-  it('exchanges the one-time code for a bearer token, exactly once', async () => {
-    const res = await app.request('/v1/auth/exchange', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
+  it('checks the username with Last.fm, keeps its canonical spelling and hands out a bearer token', async () => {
+    const res = await signIn({ username: '  SomeOne ', platform: 'web' });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token: string; user: { lastfmUsername: string } };
-    expect(body.user.lastfmUsername).toBe('someone');
+    const body = (await res.json()) as { token: string; user: { lastfmUsername: string; lastfmUrl: string; realName: string } };
+    expect(body.user).toMatchObject({ lastfmUsername: 'someone', lastfmUrl: 'https://www.last.fm/user/someone', realName: 'Some One' });
+    expect(body.token).toMatch(/^[A-Za-z0-9_-]{40,}$/);
     token = body.token;
-
-    const again = await app.request('/v1/auth/exchange', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    expect(again.status).toBe(400);
+    const lookup = fake.state.calls.find((u) => u.searchParams.get('method') === 'user.getInfo');
+    expect(lookup?.searchParams.get('user')).toBe('SomeOne');
   });
 
-  it('stores the Last.fm session key encrypted and queues nothing: the history is the device\'s job', async () => {
+  it('stores the profile and no Last.fm credentials, and queues nothing: the history is the device\'s job', async () => {
     const [user] = await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'));
-    expect(user?.realName).toBe('Some One');
-    const sessions = await services.db.select().from(schema.lastfmSessions).where(eq(schema.lastfmSessions.userId, user!.id));
+    expect(user).toMatchObject({ realName: 'Some One', country: 'DE', lastfmReportedPlaycount: 1 });
+    const sessions = await services.db.select().from(schema.appSessions).where(eq(schema.appSessions.userId, user!.id));
     expect(sessions).toHaveLength(1);
-    expect(Buffer.from(sessions[0]!.sessionKeyCiphertext).toString('utf8')).not.toContain('a'.repeat(32));
+    expect(sessions[0]!.tokenHash).not.toBe(token);
     const jobs = await services.db.select().from(schema.syncJobs).where(eq(schema.syncJobs.userId, user!.id));
     expect(jobs).toEqual([]);
+  });
+
+  it('says so when Last.fm has no such user, and when Last.fm is down', async () => {
+    const missing = await signIn({ username: 'nobody', platform: 'ios' });
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({ error: 'user_not_found', message: 'Last.fm has no user called nobody.' });
+
+    fake.state.userInfoError = 11;
+    const down = await signIn({ username: 'someone', platform: 'web' });
+    fake.state.userInfoError = null;
+    expect(down.status).toBe(502);
+    await expect(down.json()).resolves.toMatchObject({ error: 'lastfm_unreachable' });
+  });
+
+  it('refuses a blank username or an unknown platform without asking Last.fm', async () => {
+    const before = fake.state.calls.length;
+    expect((await signIn({ username: '   ', platform: 'web' })).status).toBe(400);
+    expect((await signIn({ username: 'someone', platform: 'tv' })).status).toBe(400);
+    expect((await signIn(null)).status).toBe(400);
+    expect(fake.state.calls.length).toBe(before);
   });
 
   it('serves /v1/me with the bearer token and revokes it on logout', async () => {
@@ -126,26 +112,24 @@ describe('Last.fm web auth flow', () => {
     expect((await app.request('/v1/me', { headers: { authorization: `Bearer ${token}` } })).status).toBe(401);
   });
 
-  it('deletes the account and everything it owns', async () => {
-    const start = await app.request('/v1/auth/lastfm/start?platform=web');
-    const state = new URL(new URL(start.headers.get('location')!).searchParams.get('cb')!).searchParams.get('state');
-    const callback = await app.request(`/v1/auth/lastfm/callback?state=${state}&token=TOKEN2`);
-    const code = new URL(callback.headers.get('location')!).searchParams.get('code')!;
-    const exchanged = (await (await app.request('/v1/auth/exchange', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })).json()) as { token: string };
-    const del = await app.request('/v1/me', { method: 'DELETE', headers: { authorization: `Bearer ${exchanged.token}` } });
-    expect(del.status).toBe(204);
-    expect((await app.request('/v1/me', { headers: { authorization: `Bearer ${exchanged.token}` } })).status).toBe(401);
-    const users = await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'));
-    expect(users).toHaveLength(0);
-    const jobs = await services.db.select().from(schema.syncJobs);
-    expect(jobs.every((j) => j.userId === null)).toBe(true);
+  it('signs the same username into the same account from another device', async () => {
+    const [before] = await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'));
+    const res = await signIn({ username: 'someone', platform: 'android' });
+    const body = (await res.json()) as { user: { id: string } };
+    expect(body.user.id).toBe(before!.id);
+    expect(await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'))).toHaveLength(1);
   });
 
-  it('reports a Last.fm token failure back to the client instead of a 500', async () => {
-    const start = await app.request('/v1/auth/lastfm/start?platform=web');
-    const state = new URL(new URL(start.headers.get('location')!).searchParams.get('cb')!).searchParams.get('state');
-    const callback = await app.request(`/v1/auth/lastfm/callback?state=${state}&token=BAD`);
-    expect(new URL(callback.headers.get('location')!).searchParams.get('error')).toBe('lastfm_14');
+  it('deletes the account and everything it owns', async () => {
+    const signedIn = (await (await signIn({ username: 'someone', platform: 'web' })).json()) as { token: string };
+    const del = await app.request('/v1/me', { method: 'DELETE', headers: { authorization: `Bearer ${signedIn.token}` } });
+    expect(del.status).toBe(204);
+    expect((await app.request('/v1/me', { headers: { authorization: `Bearer ${signedIn.token}` } })).status).toBe(401);
+    const users = await services.db.select().from(schema.users).where(eq(schema.users.lastfmUsernameKey, 'someone'));
+    expect(users).toHaveLength(0);
+    expect(await services.db.select().from(schema.appSessions)).toEqual([]);
+    const jobs = await services.db.select().from(schema.syncJobs);
+    expect(jobs.every((j) => j.userId === null)).toBe(true);
   });
 });
 
@@ -153,20 +137,20 @@ describe('env', () => {
   const base = {
     DATABASE_URL: 'postgres://u:p@localhost:5432/q',
     LASTFM_API_KEY: 'k',
-    LASTFM_CALLBACK_URL: 'http://localhost:8787/cb',
     MUSICBRAINZ_CONTACT: 'dev@example.com',
-    SESSION_SECRET: 's'.repeat(40),
   };
 
-  it('rejects a missing Last.fm secret with a readable message', () => {
+  it('needs only the Last.fm API key, not the secret, a callback URL or a session secret', () => {
     resetEnvCache();
-    expect(() => loadEnv(base)).toThrow(/LASTFM_API_SECRET/);
+    expect(loadEnv(base).LASTFM_API_SECRET).toBeUndefined();
+    resetEnvCache();
+    expect(() => loadEnv({ ...base, LASTFM_API_KEY: '' })).toThrow(/LASTFM_API_KEY/);
     resetEnvCache();
   });
 
   it('parses CORS_ORIGINS into a list and WORKER_ENABLED into a boolean', () => {
     resetEnvCache();
-    const env = loadEnv({ ...base, LASTFM_API_SECRET: 's', CORS_ORIGINS: 'http://localhost:8081, https://quiztape.example', WORKER_ENABLED: 'false' });
+    const env = loadEnv({ ...base, CORS_ORIGINS: 'http://localhost:8081, https://quiztape.example', WORKER_ENABLED: 'false' });
     expect(env.CORS_ORIGINS).toEqual(['http://localhost:8081', 'https://quiztape.example']);
     expect(env.WORKER_ENABLED).toBe(false);
     resetEnvCache();

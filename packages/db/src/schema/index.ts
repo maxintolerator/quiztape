@@ -5,4 +5,3 @@ export * from './resolutions';
 export * from './musicbrainz';
 export * from './wikidata';
 export * from './quiz';
-export * from './brackets';

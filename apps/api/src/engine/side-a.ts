@@ -7,6 +7,9 @@ import type { GeneratedQuestion, GeneratorContext } from './types';
 
 type ArtistStat = EngineArtist;
 
+/** "Where does X sit in your chart?" is only fair near the top; nobody knows their #137. */
+export const RANK_QUESTION_MAX_RANK = 20;
+
 /**
  * Side A: pure functions over the library snapshot the player's device sent. Each generator returns null
  * when the data cannot support an unambiguous question, and the round builder
@@ -55,7 +58,8 @@ type Generator = (ctx: GeneratorContext, anchor: ArtistStat, artists: ArtistStat
 const GENERATORS: Record<SideACategory, Generator> = {
   stats_artist_rank: async (_ctx, anchor) => {
     const rank = anchor.rank;
-    const tolerance = rank <= 10 ? 1 : rank <= 50 ? 3 : rank <= 200 ? 10 : Math.max(10, Math.round(rank * 0.1));
+    if (rank > RANK_QUESTION_MAX_RANK) return null;
+    const tolerance = rank <= 10 ? 1 : 3;
     return build({
       category: 'stats_artist_rank',
       templateId: 'stats_artist_rank.v1',

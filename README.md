@@ -2,7 +2,7 @@
 
 **Side A: stats. Side B: trivia.**
 
-Connect your Last.fm account and Quiztape cuts a quiz from your own listening history: Side A asks about your stats, Side B asks trivia about the bands in your library, sourced from MusicBrainz. One codebase for web, iOS and Android.
+Enter your Last.fm username and Quiztape cuts a quiz from your own listening history: Side A asks about your stats, Side B asks trivia about the bands in your library, sourced from MusicBrainz. One codebase for web, iOS and Android.
 
 See `docs/BRIEF.md` for the product brief, `CLAUDE.md` for the working rules, `docs/SCHEMA.md` for the database, `docs/COMPLIANCE.md` for the third-party terms that shape the product.
 
@@ -10,8 +10,8 @@ See `docs/BRIEF.md` for the product brief, `CLAUDE.md` for the working rules, `d
 
 Prerequisites: Node 22.13+, a Postgres URL (a free Supabase project works), a Last.fm API account.
 
-1. Create a Last.fm API account at https://www.last.fm/api/account/create. Callback URL: `http://localhost:8787/v1/auth/lastfm/callback`.
-2. Copy `.env.example` to `.env` at the repo root and fill in `DATABASE_URL`, `LASTFM_API_KEY`, `LASTFM_API_SECRET`, `MUSICBRAINZ_CONTACT` and a random `SESSION_SECRET` (32+ characters).
+1. Create a Last.fm API account at https://www.last.fm/api/account/create. Only the API key is used; the callback URL does not matter.
+2. Copy `.env.example` to `.env` at the repo root and fill in `DATABASE_URL`, `LASTFM_API_KEY` and `MUSICBRAINZ_CONTACT`.
 3. Install and migrate:
 
    ```
@@ -27,9 +27,9 @@ Prerequisites: Node 22.13+, a Postgres URL (a free Supabase project works), a La
    npm run web      # http://localhost:8081
    ```
 
-5. Open http://localhost:8081, press **Connect Last.fm**, approve, and watch the first sync spool in (your browser downloads the history from Last.fm and keeps it). When it finishes, pick Side A, a difficulty and a length, and press play.
+5. Open http://localhost:8081, enter a Last.fm username, and watch the first sync spool in (your browser downloads the history from Last.fm and keeps it). When it finishes, pick Side A, a difficulty and a length, and press play.
 
-Native: `npm run ios` / `npm run android` need Xcode or Android Studio and a development build (Expo Go cannot receive the sign-in redirect). `npm run check:platforms` proves the iOS and Android bundles compile without either.
+Native: `npm run ios` / `npm run android` need Xcode or Android Studio; Expo Go on a phone works too. `npm run check:platforms` proves the iOS and Android bundles compile without either.
 
 ## Deploy
 

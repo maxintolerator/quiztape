@@ -1,20 +1,20 @@
 # Terms of Use
 
-_Effective 2026-10-03. Source of truth: `packages/shared/src/legal.ts`, served in-app at /terms. Regenerate with `npm run legal:render`._
+_Effective 2026-10-05. Source of truth: `packages/shared/src/legal.ts`, served in-app at /terms. Regenerate with `npm run legal:render`._
 
-Quiztape is a free, non-commercial music quiz made by one person for fun. These terms keep expectations honest on both sides. By connecting your Last.fm account you agree to them; if you do not, please do not use Quiztape.
+Quiztape is a free, non-commercial music quiz made by one person for fun. These terms keep expectations honest on both sides. By signing in with a Last.fm username you agree to them; if you do not, please do not use Quiztape.
 
 ## The service
 
 Quiztape (https://quiztape.com) is provided by Max Weidemann (https://intolerator.com) as a hobby project. It builds quiz rounds from your own Last.fm listening history and from public music facts. It is offered free of charge and without any commercial purpose.
 
-A Last.fm account is required. Quiztape reads your listening data through the official Last.fm API only with your approval and never writes to your Last.fm account.
+A Last.fm account is required. You sign in with your Last.fm username; Quiztape reads only the listening data your Last.fm profile shows publicly, through the official Last.fm API, and never writes to your Last.fm account.
 
 ## What you agree to
 
-Use Quiztape only with a Last.fm account you are entitled to use. Do not attempt to access other people’s data, to interfere with the service, to circumvent rate limits, or to scrape, copy or resell data obtained through Quiztape.
+Sign in with your own Last.fm username. Do not attempt to interfere with the service, to circumvent rate limits, or to scrape, copy or resell data obtained through Quiztape.
 
-You are responsible for keeping your device and login secure. Anyone with access to your logged-in device can play as you.
+There is no password: anyone who types a Last.fm username plays under it, and anyone with access to your signed-in device can play as you. Do not rely on Quiztape to keep your quiz history private.
 
 ## Third-party data and attribution
 

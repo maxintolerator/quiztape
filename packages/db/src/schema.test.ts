@@ -75,26 +75,4 @@ describe('core invariants', () => {
     const [questions] = await handle.db.select({ n: sql<number>`count(*)::int` }).from(schema.roundQuestions).where(eq(schema.roundQuestions.userId, user!.id));
     expect([settings?.n, rounds?.n, questions?.n]).toEqual([0, 0, 0]);
   });
-
-  it('rejects a bracket whose size is not a power of two', async () => {
-    const [user] = await handle.db
-      .insert(schema.users)
-      .values({ lastfmUsername: 'Bracket', lastfmUsernameKey: 'bracket' })
-      .returning();
-    await expect(
-      handle.db.insert(schema.brackets).values({ userId: user!.id, size: 6, roundCount: 3, timerSecondsIgnored: undefined } as never),
-    ).rejects.toThrow();
-    await handle.db.insert(schema.brackets).values({ userId: user!.id, size: 8, roundCount: 3 });
-  });
-
-  it('allows only one active Last.fm session per user', async () => {
-    const [user] = await handle.db
-      .insert(schema.users)
-      .values({ lastfmUsername: 'Sessions', lastfmUsernameKey: 'sessions' })
-      .returning();
-    const key = Buffer.from('ciphertext');
-    await handle.db.insert(schema.lastfmSessions).values({ userId: user!.id, sessionKeyCiphertext: key });
-    await expect(handle.db.insert(schema.lastfmSessions).values({ userId: user!.id, sessionKeyCiphertext: key })).rejects.toThrow();
-    await handle.db.insert(schema.lastfmSessions).values({ userId: user!.id, sessionKeyCiphertext: key, status: 'revoked' });
-  });
 });

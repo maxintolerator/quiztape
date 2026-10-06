@@ -3,7 +3,6 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 
 // ---- auth / sync
 export const clientPlatform = pgEnum('client_platform', ['web', 'ios', 'android']);
-export const lastfmSessionStatus = pgEnum('lastfm_session_status', ['active', 'revoked']);
 /** Only `mb_ingest` and `wd_enrich` are still queued; the history kinds remain for old rows. */
 export const syncJobKind = pgEnum('sync_job_kind', ['backfill', 'incremental', 'stats_rebuild', 'top_charts', 'mb_ingest', 'wd_enrich']);
 export const jobStatus = pgEnum('job_status', ['queued', 'running', 'succeeded', 'failed', 'cancelled']);
@@ -29,5 +28,4 @@ export const questionCategory = pgEnum('question_category', QUESTION_CATEGORIES)
 export const gradingMethod = pgEnum('grading_method', GRADING_METHODS);
 export const answerFormat = pgEnum('answer_format', ['multiple_choice', 'free_text', 'numeric', 'order']);
 export const roundStatus = pgEnum('round_status', ['draft', 'active', 'completed', 'abandoned']);
-export const bracketStatus = pgEnum('bracket_status', ['active', 'completed', 'abandoned']);
 export const llmPurpose = pgEnum('llm_purpose', ['rephrase', 'grade']);

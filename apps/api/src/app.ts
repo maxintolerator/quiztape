@@ -4,7 +4,6 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
 import { auth } from './routes/auth';
-import { brackets } from './routes/brackets';
 import { health } from './routes/health';
 import { me } from './routes/me';
 import { rounds } from './routes/rounds';
@@ -45,14 +44,13 @@ export function createApp(services: Services, options: AppOptions = {}) {
     }),
   );
 
-  // Round and bracket requests carry the player's library snapshot (a few hundred KB at most).
+  // Round requests carry the player's library snapshot (a few hundred KB at most).
   app.use('*', bodyLimit({ maxSize: 2 * 1024 * 1024, onError: (c) => c.json({ error: 'body_too_large' }, 413) }));
 
   app.route('/health', health);
   app.route('/v1/auth', auth);
   app.route('/v1/me', me);
   app.route('/v1/rounds', rounds);
-  app.route('/v1/brackets', brackets);
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404));
   app.onError((error, c) => {

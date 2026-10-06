@@ -20,7 +20,7 @@ me.get('/', async (c) => {
   return c.json(body);
 });
 
-/** Delete the account and everything owned by it (rounds, brackets, settings, sessions) in one cascade. The listening history is on the device; the client clears it. */
+/** Delete the account and everything owned by it (rounds, settings, sessions) in one cascade. The listening history is on the device; the client clears it. */
 me.delete('/', async (c) => {
   const services = c.get('services');
   const { userId } = c.get('auth')!;

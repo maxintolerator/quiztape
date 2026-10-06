@@ -1,4 +1,5 @@
-import type { MeResponse } from '@quiztape/shared';
+import type { MeResponse, SignInRequest, SignInResponse } from '@quiztape/shared';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { api, ApiError } from '@/lib/api';
@@ -24,8 +25,8 @@ interface SessionState {
   lastfmApiKey: string | null;
   /** Read the stored token and confirm it with the API. Safe to call more than once. */
   hydrate: () => Promise<void>;
-  /** Swap a one-time exchange code (from the auth redirect) for a session. */
-  exchangeCode: (code: string) => Promise<void>;
+  /** Sign in with a Last.fm username. Rejects with an ApiError (`user_not_found`, `lastfm_unreachable`, ...) the screen can explain. */
+  signIn: (username: string) => Promise<void>;
   /** The API rejected the token: drop the session without calling it again. */
   expire: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -64,14 +65,12 @@ export const useSession = create<SessionState>((set, get) => ({
     return hydrating;
   },
 
-  exchangeCode: async (code) => {
-    const { token, user } = await api<{ token: string; user: SessionUser }>('/v1/auth/exchange', {
-      method: 'POST',
-      body: { code },
-    });
+  signIn: async (username) => {
+    const body: SignInRequest = { username, platform: Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web' };
+    const { token, user } = await api<SignInResponse>('/v1/auth/session', { method: 'POST', body });
     await setItem(TOKEN_KEY, token);
     set({ status: 'authenticated', token, user, lastfmApiKey: null });
-    // The exchange answers with the user only; /v1/me adds the Last.fm key the library needs.
+    // Sign-in answers with the user only; /v1/me adds the Last.fm key the library needs.
     if (hydrating) await hydrating;
     await get().hydrate();
   },

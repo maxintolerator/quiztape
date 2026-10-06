@@ -150,10 +150,10 @@ describe('rounds', () => {
     expect(second.some((r) => seen.has(r.fingerprint))).toBe(false);
   });
 
-  it('rejects modes that are not built yet and validates the body', async () => {
+  it('rejects modes that do not exist (bracket was removed) and validates the body', async () => {
     const res = await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'bracket', difficulty: 'easy', length: 5, stats }) }));
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: 'mode_not_available' });
+    await expect(res.json()).resolves.toMatchObject({ error: 'invalid_body' });
     expect((await app.request('/v1/rounds', authed({ method: 'POST', body: JSON.stringify({ mode: 'side_a', difficulty: 'easy', length: 7, stats }) }))).status).toBe(400);
     expect((await app.request('/v1/rounds/00000000-0000-4000-8000-000000000000', authed())).status).toBe(404);
   });

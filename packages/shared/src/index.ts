@@ -4,7 +4,6 @@ export * from './api';
 export * from './rounds';
 export * from './legal';
 export * from './support';
-export * from './brackets';
 export * from './library';
 export * from './lastfm-history';
 export * from './library-sync';
